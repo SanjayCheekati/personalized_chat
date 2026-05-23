@@ -158,7 +158,8 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
     socket.on("disconnect", async () => {
       const result = await presenceStore.unregister(socket.id);
       if (result?.noSocketsLeft) {
-        socket.to(roomId).emit("user_offline", { userId: user.id });
+        const lastSeen = new Date().toISOString();
+        socket.to(roomId).emit("user_offline", { userId: user.id, lastSeen });
       }
     });
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ChatShell from "../components/ChatShell";
 import MessageInput from "../components/MessageInput";
 import MessageList from "../components/MessageList";
@@ -12,7 +12,8 @@ const DEFAULT_PEER = {
   id: null,
   name: "Partner",
   online: false,
-  typing: false
+  typing: false,
+  lastSeen: null
 };
 
 export default function Home() {
@@ -22,6 +23,9 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({
     username: "",
     password: ""
@@ -134,7 +138,8 @@ export default function Home() {
       setPeer((prev) => ({
         ...prev,
         id: payload?.userId || prev.id,
-        online: true
+        online: true,
+        lastSeen: null
       }));
     });
 
@@ -143,7 +148,8 @@ export default function Home() {
         ...prev,
         id: payload?.userId || prev.id,
         online: false,
-        typing: false
+        typing: false,
+        lastSeen: payload?.lastSeen || new Date().toISOString()
       }));
     });
 
@@ -180,6 +186,19 @@ export default function Home() {
     socketRef.current.emit("seen_message", { messageIds: unseen, seenAt });
     setMessages((prev) => markMessagesSeen(prev, unseen, seenAt));
   }, [messages, auth]);
+
+  const filteredMessages = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return messages;
+    }
+
+    return messages.filter((message) => {
+      const text = (message.text || "").toLowerCase();
+      const replyText = (message.replyTo?.text || "").toLowerCase();
+      return text.includes(query) || replyText.includes(query);
+    });
+  }, [messages, searchQuery]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -300,6 +319,17 @@ export default function Home() {
     });
   };
 
+  const handleSearchToggle = () => {
+    setSearchOpen((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSearchQuery("");
+      }
+      return next;
+    });
+    setMenuOpen(false);
+  };
+
   const handleTyping = (hasText) => {
     const socket = socketRef.current;
     if (!auth || !socket) {
@@ -384,6 +414,8 @@ export default function Home() {
     ? "typing..."
     : peer.online
     ? "online"
+    : peer.lastSeen
+    ? `last seen ${formatLastSeen(peer.lastSeen)}`
     : "offline";
 
   return (
@@ -392,8 +424,8 @@ export default function Home() {
         header={
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bubble-me)] text-sm font-semibold text-white">
-                {peer.name?.slice(0, 1) || "?"}
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ef4b5f] text-sm">
+                ❤️
               </div>
               <div>
                 <p className="text-sm font-semibold text-[var(--ink)]">{peer.name}</p>
@@ -401,8 +433,27 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {searchOpen ? (
+                <div className="flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-1.5">
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search"
+                    className="w-40 bg-transparent text-xs text-[var(--ink)] outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSearchToggle}
+                    className="text-[var(--ink-soft)]"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : null}
+
               <button
                 type="button"
+                onClick={handleSearchToggle}
                 className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
                 aria-label="Search"
               >
@@ -410,22 +461,40 @@ export default function Home() {
                   <path d="M15.5 14h-.79l-.28-.27A6 6 0 1 0 14 15.5l.27.28v.79L20 21.5 21.5 20zm-6 0A4.5 4.5 0 1 1 10 5a4.5 4.5 0 0 1-.5 9z" />
                 </svg>
               </button>
-              <button
-                type="button"
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
-                aria-label="Menu"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
-                  <path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0-.001-3.999A2 2 0 0 0 12 14zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs font-semibold text-[var(--ink)]"
-              >
-                Sign out
-              </button>
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
+                  aria-label="Menu"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                    <path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0-.001-3.999A2 2 0 0 0 12 14zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+                  </svg>
+                </button>
+                {menuOpen ? (
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-xs text-[var(--ink)] shadow-glow">
+                    <button
+                      type="button"
+                      onClick={handleSearchToggle}
+                      className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--panel)]"
+                    >
+                      Search
+                    </button>
+                    <div className="px-3 py-2 text-[var(--ink-soft)]">
+                      More features coming soon
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--panel)]"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         }
@@ -448,7 +517,7 @@ export default function Home() {
         }
       >
         <MessageList
-          messages={messages}
+          messages={filteredMessages}
           currentUserId={auth.user.id}
           onDelete={handleDelete}
           onReply={(message) => {
@@ -574,3 +643,23 @@ function formatTime(value) {
   const date = new Date(value);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+function formatLastSeen(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (isToday) {
+    return formatTime(value);
+  }
+
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${formatTime(value)}`;
+}
+

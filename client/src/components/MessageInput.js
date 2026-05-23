@@ -1,6 +1,25 @@
 import { useState } from "react";
 
-const EMOJIS = ["😀", "😍", "😘", "🥰", "😂", "😢", "👍", "🙏", "❤️", "🔥", "✨"];
+const EMOJIS = [
+  "😀",
+  "😂",
+  "❤️",
+  "😍",
+  "😭",
+  "🥺",
+  "😘",
+  "😉",
+  "👍",
+  "🙏",
+  "🔥",
+  "🎉",
+  "😅",
+  "😎",
+  "🥲",
+  "🤍",
+  "😴",
+  "🤔"
+];
 
 export default function MessageInput({
   disabled,
@@ -87,13 +106,13 @@ export default function MessageInput({
           </button>
 
           {showEmoji ? (
-            <div className="absolute bottom-[3.4rem] left-0 z-10 grid w-44 grid-cols-6 gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-glow">
+            <div className="absolute bottom-[3.4rem] left-0 z-10 grid w-56 grid-cols-9 gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-glow">
               {EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => appendEmoji(emoji)}
-                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-1 text-sm"
+                  className="text-lg"
                 >
                   {emoji}
                 </button>

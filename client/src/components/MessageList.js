@@ -55,12 +55,22 @@ export default function MessageList({
             className={`flex ${isMine ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`group max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-glow animate-pop ${
+              className={`group relative max-w-[72%] rounded-2xl px-3 py-2 text-[13px] shadow-glow animate-pop sm:max-w-[60%] sm:text-sm ${
                 isMine
                   ? "bg-[var(--bubble-me)] text-white"
                   : "bg-[var(--bubble-them)] text-[var(--ink)]"
               }`}
             >
+              {message.id && !isDeleted ? (
+                <button
+                  type="button"
+                  onClick={() => onReply?.(message)}
+                  className="absolute -right-7 top-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1 text-[var(--ink-soft)] opacity-0 transition group-hover:opacity-100 sm:-right-8"
+                  aria-label="Reply"
+                >
+                  <ReplyIcon />
+                </button>
+              ) : null}
               {!isDeleted && message.replyTo ? (
                 <div className="mb-2 rounded-xl border-l-4 border-[var(--accent)] bg-[var(--panel-dark)] px-2 py-1 text-xs text-[var(--ink-soft)]">
                   <p className="font-semibold text-[var(--ink)]">
@@ -86,11 +96,6 @@ export default function MessageList({
               </div>
               {!isDeleted ? (
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--ink-soft)] opacity-0 transition group-hover:opacity-100">
-                  {message.id ? (
-                    <button type="button" onClick={() => onReply?.(message)}>
-                      Reply
-                    </button>
-                  ) : null}
                   {isMine && message.id ? (
                     <>
                       <button type="button" onClick={() => onEdit?.(message)}>
@@ -164,4 +169,12 @@ function StatusTicks({ status }) {
     status === "seen" ? "text-[var(--tick-seen)]" : "text-[var(--ink-soft)]";
 
   return <span className={className}>✓✓</span>;
+}
+
+function ReplyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M10 9V5l-7 7 7 7v-4.1c6.1 0 9.9 2 12 6.1-1-5-4-10-12-12z" />
+    </svg>
+  );
 }
