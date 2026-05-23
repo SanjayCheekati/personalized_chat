@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const EMOJIS = ["❤️", "😘", "🥰", "😍", "😊", "✨", "💌", "🌹", "💫", "🤍"];
+const EMOJIS = ["😀", "😍", "😘", "🥰", "😂", "😢", "👍", "🙏", "❤️", "🔥", "✨"];
 
 export default function MessageInput({
   disabled,
@@ -46,9 +46,9 @@ export default function MessageInput({
   };
 
   return (
-    <div className="rounded-3xl border border-white/70 bg-white/70 p-4">
+    <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-3">
       {(replyTarget || editingMessage) && (
-        <div className="mb-3 rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-xs text-[var(--ink-soft)]">
+        <div className="mb-3 rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-xs text-[var(--ink-soft)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               {editingMessage ? (
@@ -81,19 +81,19 @@ export default function MessageInput({
             type="button"
             onClick={() => setShowEmoji((prev) => !prev)}
             disabled={disabled}
-            className="rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             🙂
           </button>
 
           {showEmoji ? (
-            <div className="absolute bottom-[3.4rem] left-0 z-10 grid w-40 grid-cols-5 gap-2 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-rose">
+            <div className="absolute bottom-[3.4rem] left-0 z-10 grid w-44 grid-cols-6 gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-glow">
               {EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => appendEmoji(emoji)}
-                  className="rounded-full border border-white/60 bg-white/80 p-1 text-sm"
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-1 text-sm"
                 >
                   {emoji}
                 </button>
@@ -107,17 +107,19 @@ export default function MessageInput({
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           rows={2}
-          placeholder={disabled ? "Connecting..." : "Write a sweet message"}
-          className="min-h-[64px] w-full flex-1 resize-none rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
+          placeholder={disabled ? "Connecting..." : "Type a message"}
+          className="min-h-[46px] w-full flex-1 resize-none rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
         />
 
         <button
           type="button"
           disabled={disabled}
           onClick={submit}
-          className="rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-glow transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Send
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+          </svg>
         </button>
       </div>
     </div>

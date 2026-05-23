@@ -25,8 +25,8 @@ export default function MessageList({
 
   if (!messages.length) {
     return (
-      <div className="rounded-3xl border border-white/70 bg-white/70 px-6 py-8 text-center text-sm text-[var(--ink-soft)]">
-        Start your love story.
+      <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-6 py-8 text-center text-sm text-[var(--ink-soft)]">
+        No messages yet.
       </div>
     );
   }
@@ -38,7 +38,7 @@ export default function MessageList({
           return (
             <div
               key={item.key}
-              className="mx-auto rounded-full border border-white/70 bg-white/80 px-4 py-1 text-[11px] uppercase tracking-[0.3em] text-[var(--ink-soft)]"
+              className="mx-auto rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-1 text-[11px] uppercase tracking-[0.3em] text-[var(--ink-soft)]"
             >
               {item.label}
             </div>
@@ -48,16 +48,6 @@ export default function MessageList({
         const message = item.message;
         const isMine = message.senderId === currentUserId;
         const isDeleted = Boolean(message.deleted);
-        const statusText =
-          isDeleted
-            ? "deleted"
-            : isMine && message.status === "seen"
-            ? "seen"
-            : isMine && message.status === "delivered"
-            ? "delivered"
-            : isMine && message.status === "sending"
-            ? "sending"
-            : "";
 
         return (
           <div
@@ -65,14 +55,14 @@ export default function MessageList({
             className={`flex ${isMine ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`group max-w-[82%] rounded-3xl px-4 py-3 text-sm shadow-glow animate-pop ${
+              className={`group max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-glow animate-pop ${
                 isMine
                   ? "bg-[var(--bubble-me)] text-white"
                   : "bg-[var(--bubble-them)] text-[var(--ink)]"
               }`}
             >
               {!isDeleted && message.replyTo ? (
-                <div className="mb-2 rounded-2xl border border-[var(--bubble-border)] bg-white/70 px-3 py-2 text-xs text-[var(--ink-soft)]">
+                <div className="mb-2 rounded-xl border-l-4 border-[var(--accent)] bg-[var(--panel-dark)] px-2 py-1 text-xs text-[var(--ink-soft)]">
                   <p className="font-semibold text-[var(--ink)]">
                     {message.replyTo.senderId === currentUserId ? "You" : "Them"}
                   </p>
@@ -87,34 +77,32 @@ export default function MessageList({
               >
                 {isDeleted ? "This message was deleted." : message.text}
               </p>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] opacity-80">
+              <div className="mt-1 flex items-center justify-end gap-2 text-[10px] text-[var(--ink-soft)]">
                 <span>
                   {formatTime(message.timestamp)}
                   {message.edited ? " • edited" : ""}
                 </span>
-                <div className="flex items-center gap-3">
-                  {statusText ? <span>{statusText}</span> : null}
-                  {!isDeleted ? (
-                    <div className="flex items-center gap-3 opacity-0 transition group-hover:opacity-100">
-                      {message.id ? (
-                        <button type="button" onClick={() => onReply?.(message)}>
-                          reply
-                        </button>
-                      ) : null}
-                      {isMine && message.id ? (
-                        <>
-                          <button type="button" onClick={() => onEdit?.(message)}>
-                            edit
-                          </button>
-                          <button type="button" onClick={() => onDelete?.(message)}>
-                            delete
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
+                {isMine ? <StatusTicks status={message.status} /> : null}
+              </div>
+              {!isDeleted ? (
+                <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--ink-soft)] opacity-0 transition group-hover:opacity-100">
+                  {message.id ? (
+                    <button type="button" onClick={() => onReply?.(message)}>
+                      Reply
+                    </button>
+                  ) : null}
+                  {isMine && message.id ? (
+                    <>
+                      <button type="button" onClick={() => onEdit?.(message)}>
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => onDelete?.(message)}>
+                        Delete
+                      </button>
+                    </>
                   ) : null}
                 </div>
-              </div>
+              ) : null}
             </div>
           </div>
         );
@@ -161,4 +149,19 @@ function formatDayLabel(date) {
   }
 
   return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function StatusTicks({ status }) {
+  if (!status || status === "received") {
+    return null;
+  }
+
+  if (status === "sending") {
+    return <span className="text-[10px]">⌛</span>;
+  }
+
+  const className =
+    status === "seen" ? "text-[var(--tick-seen)]" : "text-[var(--ink-soft)]";
+
+  return <span className={className}>✓✓</span>;
 }

@@ -4,14 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import ChatShell from "../components/ChatShell";
 import MessageInput from "../components/MessageInput";
 import MessageList from "../components/MessageList";
-import PresencePill from "../components/PresencePill";
 import { createSocket } from "../socket/client";
 import { fetchMessages, loginWithPassword } from "../services/api";
 
 const AUTH_KEY = "flashchat.auth";
 const DEFAULT_PEER = {
   id: null,
-  name: "Love",
+  name: "Partner",
   online: false,
   typing: false
 };
@@ -332,14 +331,12 @@ export default function Home() {
   if (!auth) {
     return (
       <div className="page-shell flex items-center justify-center">
-        <div className="w-full max-w-md rounded-3xl border border-white/70 bg-[var(--panel)] p-8 shadow-glow backdrop-blur animate-fade-in">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-8 shadow-glow animate-fade-in">
           <div className="mb-6">
             <p className="text-xs uppercase tracking-[0.4em] text-[var(--accent)]">FlashChat</p>
-            <h1 className="mt-3 text-3xl font-semibold text-[var(--ink)]">
-              A cozy place for two hearts
-            </h1>
+            <h1 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Sign in</h1>
             <p className="mt-2 text-sm text-[var(--ink-soft)]">
-              Sign in and start a sweet conversation.
+              Use your username and password.
             </p>
           </div>
 
@@ -352,7 +349,7 @@ export default function Home() {
                 setLoginForm((prev) => ({ ...prev, username: event.target.value }))
               }
               placeholder="Username"
-              className="w-full rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
+              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
             />
             <input
               type="password"
@@ -362,7 +359,7 @@ export default function Home() {
                 setLoginForm((prev) => ({ ...prev, password: event.target.value }))
               }
               placeholder="Password"
-              className="w-full rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
+              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
             />
 
             <button
@@ -383,26 +380,49 @@ export default function Home() {
 
   const seenAtMessage = findLatestSeenMessage(messages, auth.user.id);
   const typingPreview = peer.typing ? `${peer.name} is typing...` : "";
+  const headerStatus = peer.typing
+    ? "typing..."
+    : peer.online
+    ? "online"
+    : "offline";
 
   return (
     <div className="page-shell">
       <ChatShell
         header={
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-[var(--accent)]">FlashChat</p>
-              <h2 className="mt-1 text-2xl font-semibold text-[var(--ink)]">Saba &amp; Arjun</h2>
-              <p className="text-xs text-[var(--ink-soft)]">Two hearts, one conversation.</p>
-            </div>
             <div className="flex items-center gap-3">
-              <PresencePill online={peer.online} typing={peer.typing} />
-              <div className="text-xs text-[var(--ink-soft)]">
-                {status.connected ? "connected" : status.connecting ? "connecting" : "offline"}
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bubble-me)] text-sm font-semibold text-white">
+                {peer.name?.slice(0, 1) || "?"}
               </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--ink)]">{peer.name}</p>
+                <p className="text-xs text-[var(--ink-soft)]">{headerStatus}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
+                aria-label="Search"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                  <path d="M15.5 14h-.79l-.28-.27A6 6 0 1 0 14 15.5l.27.28v.79L20 21.5 21.5 20zm-6 0A4.5 4.5 0 1 1 10 5a4.5 4.5 0 0 1-.5 9z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
+                aria-label="Menu"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                  <path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0-.001-3.999A2 2 0 0 0 12 14zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+                </svg>
+              </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-full border border-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-[var(--accent)]"
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs font-semibold text-[var(--ink)]"
               >
                 Sign out
               </button>
