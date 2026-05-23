@@ -139,7 +139,7 @@ async function findByUsername(username) {
     return null;
   }
 
-  const normalized = username.toLowerCase();
+  const normalized = String(username).trim().toLowerCase();
 
   if (usersCollection) {
     const user = await usersCollection.findOne({ username: normalized });

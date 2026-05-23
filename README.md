@@ -46,6 +46,8 @@ Set SEED_USERS in server/.env and run:
 Each user can have a single password or a list of valid passwords:
 SEED_USERS=[{"username":"saba","passwords":["2005","2006"]},{"username":"arjun","passwords":["2004"]}]
 
+Usernames are case-insensitive (arjun, ARJUN, Arjun all work). Passwords remain case-sensitive.
+
 ## Deploy
 ### Vercel (client)
 - Set the root directory to client

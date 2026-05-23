@@ -27,12 +27,13 @@ function sanitizeUser(user) {
 
 async function login(req, res, env) {
   const { username, password } = req.body || {};
+  const normalizedUsername = String(username || "").trim().toLowerCase();
 
-  if (!username || !password) {
+  if (!normalizedUsername || !password) {
     return res.status(400).json({ error: "missing_credentials" });
   }
 
-  const user = await userStore.findByUsername(username);
+  const user = await userStore.findByUsername(normalizedUsername);
   if (!user) {
     return res.status(401).json({ error: "invalid_credentials" });
   }
