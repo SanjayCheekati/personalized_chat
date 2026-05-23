@@ -422,13 +422,13 @@ export default function Home() {
     <div className="page-shell">
       <ChatShell
         header={
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex w-full items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ef4b5f] text-sm">
                 ❤️
               </div>
-              <div>
-                <p className="text-sm font-semibold text-[var(--ink)]">{peer.name}</p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">{peer.name}</p>
                 <p className="text-xs text-[var(--ink-soft)]">{headerStatus}</p>
               </div>
             </div>
@@ -439,7 +439,7 @@ export default function Home() {
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search"
-                    className="w-40 bg-transparent text-xs text-[var(--ink)] outline-none"
+                    className="w-20 bg-transparent text-xs text-[var(--ink)] outline-none sm:w-28"
                   />
                   <button
                     type="button"
@@ -475,26 +475,19 @@ export default function Home() {
                 </button>
                 {menuOpen ? (
                   <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-xs text-[var(--ink)] shadow-glow">
-                    <button
-                      type="button"
-                      onClick={handleSearchToggle}
-                      className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--panel)]"
-                    >
-                      Search
-                    </button>
                     <div className="px-3 py-2 text-[var(--ink-soft)]">
                       More features coming soon
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--panel)]"
-                    >
-                      Sign out
-                    </button>
                   </div>
                 ) : null}
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs font-semibold text-[var(--ink)]"
+              >
+                Sign out
+              </button>
             </div>
           </div>
         }
