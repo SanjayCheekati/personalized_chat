@@ -22,7 +22,9 @@ function createMessageStore({ db, cache } = {}) {
     text: doc.text,
     clientId: doc.clientId || null,
     timestamp: doc.timestamp || doc.createdAt?.toISOString(),
-    seen: Boolean(doc.seen)
+    seen: Boolean(doc.seen),
+    deleted: Boolean(doc.deleted),
+    deletedBy: doc.deletedBy || null
   });
 
   const list = async (roomId, options = {}) => {
@@ -79,7 +81,8 @@ function createMessageStore({ db, cache } = {}) {
       clientId: input.clientId || null,
       timestamp: now.toISOString(),
       createdAt: now,
-      seen: false
+      seen: false,
+      deleted: false
     };
 
     if (collection) {
@@ -133,10 +136,46 @@ function createMessageStore({ db, cache } = {}) {
     }
   };
 
+  const markDeleted = async (roomId, messageId, deletedBy) => {
+    if (!messageId) {
+      return null;
+    }
+
+    if (collection) {
+      await collection.updateOne(
+        { roomId, id: messageId },
+        { $set: { deleted: true, deletedBy, deletedAt: new Date() } }
+      );
+    } else {
+      const messages = getRoom(roomId);
+      messages.forEach((message) => {
+        if (message.id === messageId) {
+          message.deleted = true;
+          message.deletedBy = deletedBy || null;
+        }
+      });
+    }
+
+    if (cache) {
+      const cached = await cache.getJSON(`messages:${roomId}`);
+      if (Array.isArray(cached)) {
+        const updated = cached.map((message) =>
+          message.id === messageId
+            ? { ...message, deleted: true, deletedBy: deletedBy || null }
+            : message
+        );
+        await cache.setJSON(`messages:${roomId}`, updated, MESSAGE_CACHE_TTL);
+      }
+    }
+
+    return messageId;
+  };
+
   return {
     list,
     save,
-    markSeen
+    markSeen,
+    markDeleted
   };
 }
 

@@ -11,7 +11,7 @@ import { fetchMessages, loginWithPassword } from "../services/api";
 const AUTH_KEY = "flashchat.auth";
 const DEFAULT_PEER = {
   id: null,
-  name: "Partner",
+  name: "Love",
   online: false,
   typing: false
 };
@@ -102,6 +102,13 @@ export default function Home() {
         return;
       }
       setMessages((prev) => markMessagesSeen(prev, payload.messageIds));
+    });
+
+    socket.on("message_deleted", (payload) => {
+      if (!payload?.messageId) {
+        return;
+      }
+      setMessages((prev) => markMessageDeleted(prev, payload.messageId, payload.deletedBy));
     });
 
     socket.on("user_online", (payload) => {
@@ -203,6 +210,7 @@ export default function Home() {
       text: trimmed,
       timestamp: new Date().toISOString(),
       seen: false,
+      deleted: false,
       status: "sending"
     };
 
@@ -218,6 +226,19 @@ export default function Home() {
         setMessages((prev) => upsertMessage(prev, ack.message, auth.user.id));
       }
     );
+  };
+
+  const handleDelete = (message) => {
+    if (!auth || !socketRef.current || !message?.id) {
+      return;
+    }
+
+    setMessages((prev) => markMessageDeleted(prev, message.id, auth.user.id));
+    socketRef.current.emit("delete_message", { messageId: message.id }, (ack) => {
+      if (!ack?.ok) {
+        setStatus((prev) => ({ ...prev, error: "delete_failed" }));
+      }
+    });
   };
 
   const handleTyping = (hasText) => {
@@ -253,10 +274,12 @@ export default function Home() {
       <div className="page-shell flex items-center justify-center">
         <div className="w-full max-w-md rounded-3xl border border-white/70 bg-[var(--panel)] p-8 shadow-glow backdrop-blur animate-fade-in">
           <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--accent)]">FlashChat</p>
-            <h1 className="mt-3 text-3xl font-semibold text-[var(--ink)]">Instant 1-to-1 chat</h1>
+            <p className="text-xs uppercase tracking-[0.4em] text-[var(--accent)]">FlashChat</p>
+            <h1 className="mt-3 text-3xl font-semibold text-[var(--ink)]">
+              A cozy place for two hearts
+            </h1>
             <p className="mt-2 text-sm text-[var(--ink-soft)]">
-              Sign in with your username and password.
+              Sign in and start a sweet conversation.
             </p>
           </div>
 
@@ -304,9 +327,11 @@ export default function Home() {
         header={
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--accent)]">FlashChat</p>
-              <h2 className="mt-1 text-xl font-semibold text-[var(--ink)]">Chat room</h2>
-              <p className="text-xs text-[var(--ink-soft)]">Room: {auth.roomId}</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-[var(--accent)]">FlashChat</p>
+              <h2 className="mt-1 text-2xl font-semibold text-[var(--ink)]">
+                You &amp; {peer.name}
+              </h2>
+              <p className="text-xs text-[var(--ink-soft)]">Two hearts, one conversation.</p>
             </div>
             <div className="flex items-center gap-3">
               <PresencePill online={peer.online} typing={peer.typing} />
@@ -331,7 +356,11 @@ export default function Home() {
           />
         }
       >
-        <MessageList messages={messages} currentUserId={auth.user.id} />
+        <MessageList
+          messages={messages}
+          currentUserId={auth.user.id}
+          onDelete={handleDelete}
+        />
       </ChatShell>
     </div>
   );
@@ -347,11 +376,15 @@ function makeClientId() {
 function normalizeMessages(list, currentUserId) {
   return list.map((message) => ({
     ...message,
+    deleted: Boolean(message.deleted),
     status: resolveStatus(message, currentUserId)
   }));
 }
 
 function resolveStatus(message, currentUserId) {
+  if (message.deleted) {
+    return "deleted";
+  }
   if (message.senderId === currentUserId) {
     if (message.seen) {
       return "seen";
@@ -386,6 +419,14 @@ function markMessagesSeen(list, ids) {
   return list.map((message) =>
     ids.includes(message.id)
       ? { ...message, seen: true, status: "seen" }
+      : message
+  );
+}
+
+function markMessageDeleted(list, messageId, deletedBy) {
+  return list.map((message) =>
+    message.id === messageId
+      ? { ...message, deleted: true, deletedBy, status: "deleted" }
       : message
   );
 }

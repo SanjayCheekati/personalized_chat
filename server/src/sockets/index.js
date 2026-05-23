@@ -91,6 +91,29 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
       socket.to(roomId).emit("message_seen", { messageIds: ids, seenBy: user.id });
     });
 
+    socket.on("delete_message", async (payload, ack) => {
+      const messageId = payload?.messageId;
+      if (!messageId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_message_id" });
+        }
+        return;
+      }
+
+      try {
+        await messageStore.markDeleted(roomId, messageId, user.id);
+        io.to(roomId).emit("message_deleted", { messageId, deletedBy: user.id });
+
+        if (typeof ack === "function") {
+          ack({ ok: true });
+        }
+      } catch {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "delete_failed" });
+        }
+      }
+    });
+
     socket.on("disconnect", async () => {
       const result = await presenceStore.unregister(socket.id);
       if (result?.noSocketsLeft) {

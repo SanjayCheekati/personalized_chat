@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const QUICK_REPLIES = [":)", ":D", "<3", ";)", ":P"];
+const EMOJIS = ["😍", "🥰", "😘", "❤️", "💌", "✨", "🌹", "😊"];
 
 export default function MessageInput({ disabled, onSend, onTyping }) {
   const [value, setValue] = useState("");
@@ -34,36 +34,39 @@ export default function MessageInput({ disabled, onSend, onTyping }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        {QUICK_REPLIES.map((reply) => (
-          <button
-            key={reply}
-            type="button"
-            onClick={() => appendQuickReply(reply)}
-            className="rounded-full border border-white/70 bg-white/70 px-3 py-1 text-xs text-[var(--ink)]"
-          >
-            {reply}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-end gap-3">
+      <div className="rounded-3xl border border-white/70 bg-white/70 p-4 shadow-rose">
         <textarea
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           rows={2}
-          placeholder={disabled ? "Connecting..." : "Type a message"}
-          className="min-h-[56px] flex-1 resize-none rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
+          placeholder={disabled ? "Connecting..." : "Write a sweet message"}
+          className="min-h-[64px] w-full resize-none rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm outline-none focus:border-[var(--accent)]"
         />
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={submit}
-          className="rounded-2xl bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Send
-        </button>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => appendQuickReply(emoji)}
+                className="rounded-full border border-white/70 bg-white/80 px-3 py-1 text-sm text-[var(--ink)] transition hover:-translate-y-0.5"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={submit}
+            className="rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );
