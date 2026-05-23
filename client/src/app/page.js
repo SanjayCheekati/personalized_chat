@@ -20,6 +20,9 @@ export default function Home() {
   const [auth, setAuth] = useState(null);
   const [messages, setMessages] = useState([]);
   const [peer, setPeer] = useState(DEFAULT_PEER);
+  const [draft, setDraft] = useState("");
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
   const [loginForm, setLoginForm] = useState({
     username: "",
     password: ""
@@ -44,6 +47,16 @@ export default function Home() {
       localStorage.removeItem(AUTH_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    if (!auth?.user?.username) {
+      return;
+    }
+
+    const username = auth.user.username.toLowerCase();
+    const name = username === "saba" ? "Arjun" : username === "arjun" ? "Saba" : DEFAULT_PEER.name;
+    setPeer((prev) => ({ ...prev, name }));
+  }, [auth]);
 
   useEffect(() => {
     if (!auth) {
@@ -101,7 +114,7 @@ export default function Home() {
       if (!payload?.messageIds) {
         return;
       }
-      setMessages((prev) => markMessagesSeen(prev, payload.messageIds));
+      setMessages((prev) => markMessagesSeen(prev, payload.messageIds, payload.seenAt));
     });
 
     socket.on("message_deleted", (payload) => {
@@ -109,6 +122,13 @@ export default function Home() {
         return;
       }
       setMessages((prev) => markMessageDeleted(prev, payload.messageId, payload.deletedBy));
+    });
+
+    socket.on("message_edited", (payload) => {
+      if (!payload?.message) {
+        return;
+      }
+      setMessages((prev) => upsertMessage(prev, payload.message, auth.user.id));
     });
 
     socket.on("user_online", (payload) => {
@@ -157,8 +177,9 @@ export default function Home() {
       return;
     }
 
-    socketRef.current.emit("seen_message", { messageIds: unseen });
-    setMessages((prev) => markMessagesSeen(prev, unseen));
+    const seenAt = new Date().toISOString();
+    socketRef.current.emit("seen_message", { messageIds: unseen, seenAt });
+    setMessages((prev) => markMessagesSeen(prev, unseen, seenAt));
   }, [messages, auth]);
 
   const handleLogin = async (event) => {
@@ -187,6 +208,9 @@ export default function Home() {
     setAuth(null);
     setMessages([]);
     setPeer(DEFAULT_PEER);
+    setDraft("");
+    setReplyTarget(null);
+    setEditingMessage(null);
     setStatus({ connecting: false, connected: false, error: "" });
   };
 
@@ -200,7 +224,34 @@ export default function Home() {
       return;
     }
 
+    if (editingMessage?.id) {
+      const editedAt = new Date().toISOString();
+      setMessages((prev) => markMessageEdited(prev, editingMessage.id, trimmed, editedAt));
+      socketRef.current.emit(
+        "edit_message",
+        { messageId: editingMessage.id, text: trimmed },
+        (ack) => {
+          if (!ack?.ok || !ack?.message) {
+            setStatus((prev) => ({ ...prev, error: "edit_failed" }));
+            return;
+          }
+          setMessages((prev) => upsertMessage(prev, ack.message, auth.user.id));
+        }
+      );
+      setEditingMessage(null);
+      setReplyTarget(null);
+      setDraft("");
+      return;
+    }
+
     const clientId = makeClientId();
+    const replyTo = replyTarget
+      ? {
+          id: replyTarget.id,
+          text: replyTarget.text,
+          senderId: replyTarget.senderId
+        }
+      : null;
     const optimistic = {
       id: null,
       clientId,
@@ -208,9 +259,11 @@ export default function Home() {
       senderId: auth.user.id,
       receiverId: null,
       text: trimmed,
+      replyTo,
       timestamp: new Date().toISOString(),
       seen: false,
       deleted: false,
+      edited: false,
       status: "sending"
     };
 
@@ -218,7 +271,7 @@ export default function Home() {
 
     socketRef.current.emit(
       "send_message",
-      { text: trimmed, clientId },
+      { text: trimmed, clientId, replyTo },
       (ack) => {
         if (!ack?.message) {
           return;
@@ -226,10 +279,17 @@ export default function Home() {
         setMessages((prev) => upsertMessage(prev, ack.message, auth.user.id));
       }
     );
+
+    setReplyTarget(null);
+    setDraft("");
   };
 
   const handleDelete = (message) => {
     if (!auth || !socketRef.current || !message?.id) {
+      return;
+    }
+
+    if (!window.confirm("Delete this message for both of you?")) {
       return;
     }
 
@@ -321,6 +381,9 @@ export default function Home() {
     );
   }
 
+  const seenAtMessage = findLatestSeenMessage(messages, auth.user.id);
+  const typingPreview = peer.typing ? `${peer.name} is typing...` : "";
+
   return (
     <div className="page-shell">
       <ChatShell
@@ -328,9 +391,7 @@ export default function Home() {
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-[var(--accent)]">FlashChat</p>
-              <h2 className="mt-1 text-2xl font-semibold text-[var(--ink)]">
-                You &amp; {peer.name}
-              </h2>
+              <h2 className="mt-1 text-2xl font-semibold text-[var(--ink)]">Saba &amp; Arjun</h2>
               <p className="text-xs text-[var(--ink-soft)]">Two hearts, one conversation.</p>
             </div>
             <div className="flex items-center gap-3">
@@ -351,8 +412,18 @@ export default function Home() {
         footer={
           <MessageInput
             disabled={!status.connected}
+            value={draft}
+            onValueChange={setDraft}
             onSend={handleSend}
             onTyping={handleTyping}
+            replyTarget={replyTarget}
+            onCancelReply={() => setReplyTarget(null)}
+            editingMessage={editingMessage}
+            onCancelEdit={() => {
+              setEditingMessage(null);
+              setDraft("");
+            }}
+            typingPreview={typingPreview}
           />
         }
       >
@@ -360,7 +431,27 @@ export default function Home() {
           messages={messages}
           currentUserId={auth.user.id}
           onDelete={handleDelete}
+          onReply={(message) => {
+            if (message.deleted) {
+              return;
+            }
+            setReplyTarget(message);
+            setEditingMessage(null);
+          }}
+          onEdit={(message) => {
+            if (message.deleted || !message.id) {
+              return;
+            }
+            setEditingMessage({ id: message.id, text: message.text });
+            setDraft(message.text || "");
+            setReplyTarget(null);
+          }}
         />
+        {seenAtMessage ? (
+          <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
+            Seen at {formatTime(seenAtMessage.seenAt || seenAtMessage.timestamp)}
+          </p>
+        ) : null}
       </ChatShell>
     </div>
   );
@@ -377,6 +468,8 @@ function normalizeMessages(list, currentUserId) {
   return list.map((message) => ({
     ...message,
     deleted: Boolean(message.deleted),
+    edited: Boolean(message.edited),
+    seenAt: message.seenAt || null,
     status: resolveStatus(message, currentUserId)
   }));
 }
@@ -411,14 +504,14 @@ function upsertMessage(list, message, currentUserId) {
   return updated;
 }
 
-function markMessagesSeen(list, ids) {
+function markMessagesSeen(list, ids, seenAt) {
   if (!ids || ids.length === 0) {
     return list;
   }
 
   return list.map((message) =>
     ids.includes(message.id)
-      ? { ...message, seen: true, status: "seen" }
+      ? { ...message, seen: true, seenAt: seenAt || message.seenAt, status: "seen" }
       : message
   );
 }
@@ -429,4 +522,35 @@ function markMessageDeleted(list, messageId, deletedBy) {
       ? { ...message, deleted: true, deletedBy, status: "deleted" }
       : message
   );
+}
+
+function markMessageEdited(list, messageId, text, editedAt) {
+  return list.map((message) =>
+    message.id === messageId
+      ? { ...message, text, edited: true, editedAt, status: message.status }
+      : message
+  );
+}
+
+function findLatestSeenMessage(list, currentUserId) {
+  const seenMessages = list.filter(
+    (message) => message.senderId === currentUserId && message.seen
+  );
+  if (seenMessages.length === 0) {
+    return null;
+  }
+
+  return seenMessages.reduce((latest, message) => {
+    const latestTime = new Date(latest.seenAt || latest.timestamp).getTime();
+    const messageTime = new Date(message.seenAt || message.timestamp).getTime();
+    return messageTime > latestTime ? message : latest;
+  });
+}
+
+function formatTime(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

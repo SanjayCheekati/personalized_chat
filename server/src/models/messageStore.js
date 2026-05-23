@@ -20,11 +20,15 @@ function createMessageStore({ db, cache } = {}) {
     senderId: doc.senderId,
     receiverId: doc.receiverId || null,
     text: doc.text,
+    replyTo: doc.replyTo || null,
     clientId: doc.clientId || null,
     timestamp: doc.timestamp || doc.createdAt?.toISOString(),
     seen: Boolean(doc.seen),
+    seenAt: doc.seenAt ? doc.seenAt.toISOString?.() || doc.seenAt : null,
     deleted: Boolean(doc.deleted),
-    deletedBy: doc.deletedBy || null
+    deletedBy: doc.deletedBy || null,
+    edited: Boolean(doc.edited),
+    editedAt: doc.editedAt ? doc.editedAt.toISOString?.() || doc.editedAt : null
   });
 
   const list = async (roomId, options = {}) => {
@@ -72,16 +76,27 @@ function createMessageStore({ db, cache } = {}) {
 
   const save = async (input) => {
     const now = new Date();
+    const replyTo = input.replyTo
+      ? {
+          id: input.replyTo.id,
+          text: input.replyTo.text,
+          senderId: input.replyTo.senderId || null
+        }
+      : null;
     const message = {
       id: nanoid(12),
       roomId: input.roomId,
       senderId: input.senderId,
       receiverId: input.receiverId,
       text: input.text,
+      replyTo,
       clientId: input.clientId || null,
       timestamp: now.toISOString(),
       createdAt: now,
       seen: false,
+      seenAt: null,
+      edited: false,
+      editedAt: null,
       deleted: false
     };
 
@@ -103,15 +118,17 @@ function createMessageStore({ db, cache } = {}) {
     return message;
   };
 
-  const markSeen = async (roomId, messageIds) => {
+  const markSeen = async (roomId, messageIds, seenAt) => {
     if (!messageIds || messageIds.length === 0) {
       return;
     }
 
+    const seenAtDate = seenAt ? new Date(seenAt) : new Date();
+
     if (collection) {
       await collection.updateMany(
         { roomId, id: { $in: messageIds } },
-        { $set: { seen: true, seenAt: new Date() } }
+        { $set: { seen: true, seenAt: seenAtDate } }
       );
     } else {
       const ids = new Set(messageIds);
@@ -119,6 +136,7 @@ function createMessageStore({ db, cache } = {}) {
       messages.forEach((message) => {
         if (ids.has(message.id)) {
           message.seen = true;
+          message.seenAt = seenAtDate.toISOString();
         }
       });
     }
@@ -128,12 +146,67 @@ function createMessageStore({ db, cache } = {}) {
       if (Array.isArray(cached)) {
         const updated = cached.map((message) =>
           messageIds.includes(message.id)
-            ? { ...message, seen: true }
+            ? { ...message, seen: true, seenAt: seenAtDate.toISOString() }
             : message
         );
         await cache.setJSON(`messages:${roomId}`, updated, MESSAGE_CACHE_TTL);
       }
     }
+  };
+
+  const markEdited = async (roomId, messageId, senderId, text) => {
+    if (!messageId || !text) {
+      return null;
+    }
+
+    const editedAt = new Date();
+
+    if (collection) {
+      const result = await collection.findOneAndUpdate(
+        { roomId, id: messageId, senderId },
+        { $set: { text, edited: true, editedAt } },
+        { returnDocument: "after" }
+      );
+
+      const mapped = result.value ? mapDoc(result.value) : null;
+      if (mapped && cache) {
+        const cached = await cache.getJSON(`messages:${roomId}`);
+        if (Array.isArray(cached)) {
+          const updated = cached.map((message) =>
+            message.id === messageId
+              ? { ...message, text: mapped.text, edited: true, editedAt: mapped.editedAt }
+              : message
+          );
+          await cache.setJSON(`messages:${roomId}`, updated, MESSAGE_CACHE_TTL);
+        }
+      }
+
+      return mapped;
+    }
+
+    const messages = getRoom(roomId);
+    const target = messages.find((message) => message.id === messageId);
+    if (!target || target.senderId !== senderId) {
+      return null;
+    }
+
+    target.text = text;
+    target.edited = true;
+    target.editedAt = editedAt.toISOString();
+
+    if (cache) {
+      const cached = await cache.getJSON(`messages:${roomId}`);
+      if (Array.isArray(cached)) {
+        const updated = cached.map((message) =>
+          message.id === messageId
+            ? { ...message, text, edited: true, editedAt: target.editedAt }
+            : message
+        );
+        await cache.setJSON(`messages:${roomId}`, updated, MESSAGE_CACHE_TTL);
+      }
+    }
+
+    return target;
   };
 
   const markDeleted = async (roomId, messageId, deletedBy) => {
@@ -175,6 +248,7 @@ function createMessageStore({ db, cache } = {}) {
     list,
     save,
     markSeen,
+    markEdited,
     markDeleted
   };
 }

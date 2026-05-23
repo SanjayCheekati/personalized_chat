@@ -53,12 +53,20 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
 
       try {
         const receiverId = await presenceStore.getOtherUserId(roomId, user.id);
+        const replyTo = payload?.replyTo
+          ? {
+              id: payload.replyTo.id,
+              text: payload.replyTo.text,
+              senderId: payload.replyTo.senderId || null
+            }
+          : null;
         const message = await messageStore.save({
           roomId,
           senderId: user.id,
           receiverId,
           text,
-          clientId: payload?.clientId || null
+          clientId: payload?.clientId || null,
+          replyTo
         });
 
         io.to(roomId).emit("receive_message", message);
@@ -86,9 +94,42 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
       if (!ids.length) {
         return;
       }
+      const seenAt = payload?.seenAt || new Date().toISOString();
 
-      await messageStore.markSeen(roomId, ids, user.id);
-      socket.to(roomId).emit("message_seen", { messageIds: ids, seenBy: user.id });
+      await messageStore.markSeen(roomId, ids, seenAt);
+      socket
+        .to(roomId)
+        .emit("message_seen", { messageIds: ids, seenBy: user.id, seenAt });
+    });
+
+    socket.on("edit_message", async (payload, ack) => {
+      const messageId = payload?.messageId;
+      const text = String(payload?.text || "").trim();
+      if (!messageId || !text) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_message" });
+        }
+        return;
+      }
+
+      try {
+        const updated = await messageStore.markEdited(roomId, messageId, user.id, text);
+        if (!updated) {
+          if (typeof ack === "function") {
+            ack({ ok: false, error: "edit_forbidden" });
+          }
+          return;
+        }
+
+        io.to(roomId).emit("message_edited", { message: updated });
+        if (typeof ack === "function") {
+          ack({ ok: true, message: updated });
+        }
+      } catch {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "edit_failed" });
+        }
+      }
     });
 
     socket.on("delete_message", async (payload, ack) => {
