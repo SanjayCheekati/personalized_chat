@@ -62,6 +62,17 @@ export default function MessageList({
         const message = item.message;
         const isMine = message.senderId === currentUserId;
         const isDeleted = Boolean(message.deleted);
+        const isRemember = message.kind === "remember";
+
+        if (isRemember) {
+          return (
+            <div key={message.id || message.clientId} className="flex justify-center">
+              <p className="text-center text-xs text-[var(--accent-warm)]">
+                {message.text}
+              </p>
+            </div>
+          );
+        }
 
         return (
           <div

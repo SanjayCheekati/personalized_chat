@@ -84,6 +84,50 @@ async function login(req, res, env, conversationStore) {
   });
 }
 
+async function signup(req, res, env, conversationStore) {
+  const { username, password } = req.body || {};
+  const normalizedUsername = String(username || "").trim().toLowerCase();
+
+  if (!normalizedUsername || !password) {
+    return res.status(400).json({ error: "missing_credentials" });
+  }
+
+  const existing = await userStore.findByUsername(normalizedUsername);
+  if (existing) {
+    return res.status(409).json({ error: "user_exists" });
+  }
+
+  const created = await userStore.createUser({
+    username: normalizedUsername,
+    password,
+    name: normalizedUsername
+  });
+
+  if (!created) {
+    return res.status(500).json({ error: "signup_failed" });
+  }
+
+  const adminUser = await userStore.findByUsername(env.ADMIN_USERNAME);
+  let roomId = null;
+  let peer = null;
+
+  if (conversationStore && adminUser) {
+    const conversation = await conversationStore.createOrFindDirect(
+      created.id,
+      adminUser.id
+    );
+    roomId = conversation ? conversation.id : null;
+    peer = sanitizeUser(adminUser);
+  }
+
+  return res.json({
+    token: signToken(created, env),
+    user: sanitizeUser(created),
+    roomId: roomId || env.DEFAULT_ROOM_ID,
+    peer
+  });
+}
+
 async function requestPasswordReset(req, res, resetRequestStore) {
   if (!resetRequestStore) {
     return res.status(500).json({ error: "reset_unavailable" });
@@ -110,4 +154,4 @@ function logout(req, res) {
   res.json({ ok: true });
 }
 
-module.exports = { login, logout, requestPasswordReset };
+module.exports = { login, logout, requestPasswordReset, signup };

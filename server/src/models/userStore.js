@@ -312,6 +312,44 @@ async function setPassword(userId, password) {
   return normalizeUser(next);
 }
 
+async function createUser({ username, password, name }) {
+  if (!username || !password) {
+    return null;
+  }
+
+  const normalizedUsername = String(username).trim().toLowerCase();
+  const now = new Date();
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = {
+    id: nanoid(12),
+    name: name || normalizedUsername,
+    username: normalizedUsername,
+    email: "",
+    passwordHash,
+    passwordHashes: [passwordHash],
+    role: DEFAULT_ROLE,
+    status: DEFAULT_STATUS,
+    isGuest: false,
+    createdAt: now,
+    updatedAt: now,
+    lastLoginAt: null,
+    lastSeenAt: null
+  };
+
+  if (usersCollection) {
+    try {
+      await usersCollection.insertOne({ ...user });
+    } catch (error) {
+      if (error?.code === 11000) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  return normalizeUser(addUser(user));
+}
+
 async function deleteUser(userId) {
   if (!userId) {
     return null;
@@ -405,6 +443,7 @@ const userStore = {
   countUsers,
   updateUser,
   setPassword,
+  createUser,
   deleteUser,
   touchLogin,
   touchLastSeen,

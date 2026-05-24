@@ -24,6 +24,13 @@ export function loginWithPassword(username, password) {
   });
 }
 
+export function signUp(username, password) {
+  return fetchJson("/signup", {
+    method: "POST",
+    body: JSON.stringify({ username, password })
+  });
+}
+
 export function requestPasswordReset(username, message) {
   return fetchJson("/forgot-password", {
     method: "POST",

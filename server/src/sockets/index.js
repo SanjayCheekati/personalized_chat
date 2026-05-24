@@ -350,6 +350,69 @@ function initSocket(
         });
       }
     });
+
+    socket.on("remember_admin", async (payload, ack) => {
+      if (isAdmin) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "forbidden" });
+        }
+        return;
+      }
+
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
+      try {
+        const receiverId = conversationStore
+          ? await conversationStore.getOtherParticipant(activeRoomId, user.id)
+          : await presenceStore.getOtherUserId(activeRoomId, user.id);
+
+        if (!receiverId) {
+          if (typeof ack === "function") {
+            ack({ ok: false, error: "recipient_missing" });
+          }
+          return;
+        }
+
+        const sender = userStore ? await userStore.findById(user.id) : null;
+        const senderName = sender?.name || sender?.username || "Someone";
+        const timestamp = new Date().toISOString();
+        const text = `${senderName} remembered you at ${new Date(timestamp).toLocaleTimeString(
+          [],
+          { hour: "2-digit", minute: "2-digit" }
+        )} ❤️`;
+
+        const message = await messageStore.save({
+          roomId: activeRoomId,
+          senderId: user.id,
+          receiverId,
+          text,
+          kind: "remember",
+          clientId: payload?.clientId || null
+        });
+
+        if (conversationStore) {
+          await conversationStore.touchLastMessage(activeRoomId, message);
+          await conversationStore.incrementUnread(activeRoomId, receiverId);
+        }
+
+        io.to(activeRoomId).emit("receive_message", message);
+        await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
+
+        if (typeof ack === "function") {
+          ack({ ok: true, message });
+        }
+      } catch {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "remember_failed" });
+        }
+      }
+    });
   });
 
   return io;

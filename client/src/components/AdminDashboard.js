@@ -6,7 +6,6 @@ import MessageList from "./MessageList";
 import { createSocket } from "../socket/client";
 import {
   fetchAdminConversations,
-  fetchAdminStats,
   fetchAdminUsers,
   fetchMessages,
   fetchResetRequests,
@@ -29,9 +28,9 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const [userQuery, setUserQuery] = useState("");
   const [users, setUsers] = useState([]);
   const [resetRequests, setResetRequests] = useState([]);
-  const [stats, setStats] = useState(null);
   const [typingByConversation, setTypingByConversation] = useState({});
   const [passwordDrafts, setPasswordDrafts] = useState({});
+  const [passwordVisible, setPasswordVisible] = useState({});
   const [requestNotes, setRequestNotes] = useState({});
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
@@ -69,9 +68,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       .then((data) => setResetRequests(Array.isArray(data.requests) ? data.requests : []))
       .catch(() => {});
 
-    fetchAdminStats(auth.token)
-      .then((data) => setStats(data))
-      .catch(() => {});
   }, [auth.token]);
 
   useEffect(() => {
@@ -431,32 +427,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
             />
           </div>
 
-          {stats ? (
-            <div className="grid grid-cols-2 gap-2 px-4 pb-4 text-[10px] text-[var(--ink-soft)]">
-              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2">
-                <p className="text-[11px] font-semibold text-[var(--ink)]">{stats.users}</p>
-                <p>Users</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2">
-                <p className="text-[11px] font-semibold text-[var(--ink)]">
-                  {stats.conversations}
-                </p>
-                <p>Conversations</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2">
-                <p className="text-[11px] font-semibold text-[var(--ink)]">
-                  {stats.messages}
-                </p>
-                <p>Messages</p>
-              </div>
-              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2">
-                <p className="text-[11px] font-semibold text-[var(--ink)]">
-                  {stats.onlineUsers}
-                </p>
-                <p>Online</p>
-              </div>
-            </div>
-          ) : null}
 
           <div className="flex-1 overflow-y-auto px-2 pb-4">
             {filteredConversations.map((conversation) => {
@@ -528,9 +498,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                       ? `last seen ${formatLastSeen(activeConversation.user.lastSeenAt)}`
                       : "offline"}
                   </p>
-                </div>
-                <div className="text-xs text-[var(--ink-soft)]">
-                  {stats ? `${stats.messages} messages` : ""}
                 </div>
               </div>
             </header>
@@ -633,7 +600,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                     </div>
                     <div className="mt-3 flex items-center gap-2">
                       <input
-                        type="password"
+                        type={passwordVisible[user.id] ? "text" : "password"}
                         value={passwordDrafts[user.id] || ""}
                         onChange={(event) =>
                           setPasswordDrafts((prev) => ({
@@ -641,15 +608,27 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                             [user.id]: event.target.value
                           }))
                         }
-                        placeholder="New password"
+                        placeholder="Edit password"
                         className="flex-1 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-[11px] text-[var(--ink)]"
                       />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPasswordVisible((prev) => ({
+                            ...prev,
+                            [user.id]: !prev[user.id]
+                          }))
+                        }
+                        className="rounded-full border border-[var(--panel-border)] px-3 py-2 text-[10px] text-[var(--ink)]"
+                      >
+                        {passwordVisible[user.id] ? "Hide" : "Show"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => handlePasswordReset(user.id)}
                         className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white"
                       >
-                        Reset
+                        Update
                       </button>
                       <button
                         type="button"

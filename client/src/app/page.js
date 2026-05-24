@@ -11,7 +11,8 @@ import {
   fetchConversation,
   fetchMessages,
   loginWithPassword,
-  requestPasswordReset
+  requestPasswordReset,
+  signUp
 } from "../services/api";
 
 const AUTH_KEY = "flashchat.auth";
@@ -33,9 +34,17 @@ export default function Home() {
   const [editingMessage, setEditingMessage] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [authMode, setAuthMode] = useState("login");
+  const [showPassword, setShowPassword] = useState(true);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(true);
   const [loginForm, setLoginForm] = useState({
     username: "",
     password: ""
+  });
+  const [signupForm, setSignupForm] = useState({
+    username: "",
+    password: "",
+    confirmPassword: ""
   });
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotForm, setForgotForm] = useState({ username: "", message: "" });
@@ -268,6 +277,34 @@ export default function Home() {
     }
   };
 
+  const handleSignup = async (event) => {
+    event.preventDefault();
+    setStatus((prev) => ({ ...prev, error: "" }));
+
+    if (signupForm.password !== signupForm.confirmPassword) {
+      setStatus((prev) => ({ ...prev, error: "passwords_do_not_match" }));
+      return;
+    }
+
+    try {
+      const data = await signUp(signupForm.username, signupForm.password);
+
+      const nextAuth = {
+        token: data.token,
+        user: data.user,
+        roomId: data.roomId,
+        peer: data.peer || null
+      };
+
+      localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
+      setAuth(nextAuth);
+      setPeer(DEFAULT_PEER);
+      setSignupForm({ username: "", password: "", confirmPassword: "" });
+    } catch (error) {
+      setStatus((prev) => ({ ...prev, error: error?.message || "signup_failed" }));
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem(AUTH_KEY);
     setAuth(null);
@@ -420,6 +457,19 @@ export default function Home() {
     }
   };
 
+  const handleRemember = () => {
+    if (!socketRef.current || !auth?.roomId) {
+      return;
+    }
+
+    const clientId = makeClientId();
+    socketRef.current.emit("remember_admin", { clientId }, (ack) => {
+      if (!ack?.ok) {
+        setStatus((prev) => ({ ...prev, error: "remember_failed" }));
+      }
+    });
+  };
+
   if (!auth) {
     return (
       <div className="page-shell flex items-center justify-center">
@@ -432,47 +482,136 @@ export default function Home() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="text"
-              required
-              value={loginForm.username}
-              onChange={(event) =>
-                setLoginForm((prev) => ({ ...prev, username: event.target.value }))
-              }
-              placeholder="Username"
-              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-            />
-            <input
-              type="password"
-              required
-              value={loginForm.password}
-              onChange={(event) =>
-                setLoginForm((prev) => ({ ...prev, password: event.target.value }))
-              }
-              placeholder="Password"
-              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-            />
-
-            <button
-              type="submit"
-              className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5"
-            >
-              Sign in
-            </button>
-
+          <div className="mb-4 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setForgotOpen((prev) => !prev)}
-              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-xs font-semibold text-[var(--ink)]"
+              onClick={() => setAuthMode("login")}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                authMode === "login"
+                  ? "bg-[var(--accent)] text-white"
+                  : "border border-[var(--panel-border)] text-[var(--ink)]"
+              }`}
             >
-              Forgot password?
+              Login
             </button>
+            <button
+              type="button"
+              onClick={() => setAuthMode("signup")}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                authMode === "signup"
+                  ? "bg-[var(--accent)] text-white"
+                  : "border border-[var(--panel-border)] text-[var(--ink)]"
+              }`}
+            >
+              Sign up
+            </button>
+          </div>
 
-            {status.error ? (
-              <p className="text-sm text-[var(--accent-warm)]">{status.error}</p>
-            ) : null}
-          </form>
+          {authMode === "login" ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input
+                type="text"
+                required
+                value={loginForm.username}
+                onChange={(event) =>
+                  setLoginForm((prev) => ({ ...prev, username: event.target.value }))
+                }
+                placeholder="Username"
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              />
+              <input
+                type="password"
+                required
+                value={loginForm.password}
+                onChange={(event) =>
+                  setLoginForm((prev) => ({ ...prev, password: event.target.value }))
+                }
+                placeholder="Password"
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              />
+
+              <button
+                type="submit"
+                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5"
+              >
+                Sign in
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setForgotOpen((prev) => !prev)}
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-xs font-semibold text-[var(--ink)]"
+              >
+                Forgot password?
+              </button>
+
+              {status.error ? (
+                <p className="text-sm text-[var(--accent-warm)]">{status.error}</p>
+              ) : null}
+            </form>
+          ) : (
+            <form onSubmit={handleSignup} className="space-y-4">
+              <input
+                type="text"
+                required
+                value={signupForm.username}
+                onChange={(event) =>
+                  setSignupForm((prev) => ({ ...prev, username: event.target.value }))
+                }
+                placeholder="Username"
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={signupForm.password}
+                  onChange={(event) =>
+                    setSignupForm((prev) => ({ ...prev, password: event.target.value }))
+                  }
+                  placeholder="Password"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ink-soft)]"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  required
+                  value={signupForm.confirmPassword}
+                  onChange={(event) =>
+                    setSignupForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                  }
+                  placeholder="Confirm password"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ink-soft)]"
+                >
+                  {showConfirmPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5"
+              >
+                Create account
+              </button>
+
+              {status.error ? (
+                <p className="text-sm text-[var(--accent-warm)]">{status.error}</p>
+              ) : null}
+            </form>
+          )}
 
           {forgotOpen ? (
             <form onSubmit={handleForgotPassword} className="mt-6 space-y-3">
@@ -554,6 +693,15 @@ export default function Home() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {!peer.online ? (
+                <button
+                  type="button"
+                  onClick={handleRemember}
+                  className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white"
+                >
+                  Remember
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={handleToggleTheme}
