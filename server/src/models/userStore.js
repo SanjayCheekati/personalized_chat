@@ -161,9 +161,10 @@ async function ensureAdminUser(env) {
   const normalized = addUser(baseUser);
 
   if (usersCollection) {
+    const { createdAt, ...updateFields } = normalized;
     await usersCollection.updateOne(
       { username: adminUsername },
-      { $set: normalized, $setOnInsert: { createdAt: normalized.createdAt } },
+      { $set: updateFields, $setOnInsert: { createdAt } },
       { upsert: true }
     );
   }
