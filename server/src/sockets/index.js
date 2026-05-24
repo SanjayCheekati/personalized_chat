@@ -381,11 +381,7 @@ function initSocket(
 
         const sender = userStore ? await userStore.findById(user.id) : null;
         const senderName = sender?.name || sender?.username || "Someone";
-        const timestamp = new Date().toISOString();
-        const text = `${senderName} remembered you at ${new Date(timestamp).toLocaleTimeString(
-          [],
-          { hour: "2-digit", minute: "2-digit" }
-        )} ❤️`;
+        const text = senderName;
 
         const message = await messageStore.save({
           roomId: activeRoomId,

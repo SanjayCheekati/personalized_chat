@@ -8,10 +8,7 @@ import {
   fetchAdminConversations,
   fetchAdminUsers,
   fetchMessages,
-  fetchResetRequests,
   resetUserPassword,
-  updateAdminUser,
-  updateResetRequest,
   deleteUser
 } from "../services/api";
 
@@ -24,14 +21,11 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [sidebarQuery, setSidebarQuery] = useState("");
-  const [panelTab, setPanelTab] = useState("users");
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [userQuery, setUserQuery] = useState("");
   const [users, setUsers] = useState([]);
-  const [resetRequests, setResetRequests] = useState([]);
   const [typingByConversation, setTypingByConversation] = useState({});
   const [passwordDrafts, setPasswordDrafts] = useState({});
-  const [passwordVisible, setPasswordVisible] = useState({});
-  const [requestNotes, setRequestNotes] = useState({});
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const activeConversationRef = useRef(null);
@@ -50,9 +44,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       .then((data) => {
         const next = Array.isArray(data.conversations) ? data.conversations : [];
         setConversations(sortConversations(next));
-        if (!activeConversationId && next.length > 0) {
-          setActiveConversationId(next[0].id);
-        }
       })
       .catch(() => {});
   };
@@ -62,10 +53,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
 
     fetchAdminUsers(auth.token)
       .then((data) => setUsers(Array.isArray(data.users) ? data.users : []))
-      .catch(() => {});
-
-    fetchResetRequests(auth.token)
-      .then((data) => setResetRequests(Array.isArray(data.requests) ? data.requests : []))
       .catch(() => {});
 
   }, [auth.token]);
@@ -313,17 +300,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     }
   };
 
-  const handleStatusChange = (userId, nextStatus) => {
-    updateAdminUser(auth.token, userId, { status: nextStatus })
-      .then((data) => {
-        if (!data?.user) {
-          return;
-        }
-        setUsers((prev) => prev.map((user) => (user.id === userId ? data.user : user)));
-      })
-      .catch(() => {});
-  };
-
   const handlePasswordReset = (userId) => {
     const nextPassword = passwordDrafts[userId];
     if (!nextPassword) {
@@ -349,18 +325,21 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       .catch(() => {});
   };
 
-  const handleUpdateRequest = (requestId, updates) => {
-    updateResetRequest(auth.token, requestId, updates)
-      .then((data) => {
-        if (!data?.request) {
-          return;
-        }
-        setResetRequests((prev) =>
-          prev.map((request) => (request.id === requestId ? data.request : request))
-        );
-      })
-      .catch(() => {});
+  const handleOpenAdminPanel = () => {
+    setAdminPanelOpen(true);
   };
+
+  const handleBack = () => {
+    if (adminPanelOpen) {
+      setAdminPanelOpen(false);
+      return;
+    }
+
+    if (activeConversationId) {
+      setActiveConversationId(null);
+    }
+  };
+
 
   const filteredConversations = useMemo(() => {
     const query = sidebarQuery.trim().toLowerCase();
@@ -390,217 +369,100 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     );
   }, [users, userQuery]);
 
+  const showBack = adminPanelOpen || Boolean(activeConversationId);
+
   return (
     <div className="page-shell admin-shell">
-      <div className="flex w-full min-h-screen flex-col lg:flex-row">
-        <aside className="admin-sidebar w-full border-b border-[var(--panel-border)] lg:h-screen lg:w-80 lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between gap-3 border-b border-[var(--panel-border)] px-4 py-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--accent)]">Admin</p>
-              <p className="text-sm font-semibold text-[var(--ink)]">Arjun</p>
+      <div className="flex min-h-screen w-full flex-col">
+        <header className="sticky top-0 z-30 border-b border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {showBack ? (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)]"
+                  aria-label="Back"
+                >
+                  <BackIcon />
+                </button>
+              ) : null}
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[var(--accent)]">Admin</p>
+                <p className="text-sm font-semibold text-[var(--ink)]">Arjun</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onToggleTheme}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs text-[var(--ink)]"
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)]"
+                aria-label="Toggle theme"
               >
-                {theme === "light" ? "Dark" : "Light"}
+                {theme === "light" ? <MoonIcon /> : <SunIcon />}
               </button>
               <button
                 type="button"
                 onClick={onLogout}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs text-[var(--ink)]"
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--accent-warm)]"
+                aria-label="Sign out"
               >
-                Sign out
+                <SignOutIcon />
               </button>
+              {!adminPanelOpen ? (
+                <button
+                  type="button"
+                  onClick={handleOpenAdminPanel}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)]"
+                  aria-label="Admin panel"
+                >
+                  <DotsIcon />
+                </button>
+              ) : null}
             </div>
           </div>
+        </header>
 
-          <div className="px-4 py-3">
-            <input
-              type="text"
-              value={sidebarQuery}
-              onChange={(event) => setSidebarQuery(event.target.value)}
-              placeholder="Search chats"
-              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-4 py-2 text-xs text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-            />
-          </div>
-
-
-          <div className="flex-1 overflow-y-auto px-2 pb-4">
-            {filteredConversations.map((conversation) => {
-              const preview = conversation.lastMessage?.deleted
-                ? "Message deleted"
-                : conversation.lastMessage?.text || "";
-              const timestamp = conversation.lastMessageAt || conversation.updatedAt;
-              const isActive = conversation.id === activeConversationId;
-
-              return (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  onClick={() => setActiveConversationId(conversation.id)}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
-                    isActive
-                      ? "bg-[var(--panel-dark)]"
-                      : "hover:bg-[var(--panel-dark)]"
-                  }`}
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
-                    {(conversation.user?.name || "?").slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[var(--ink)]">
-                      {conversation.user?.name || conversation.user?.username || "Unknown"}
-                    </p>
-                    <p className="truncate text-xs text-[var(--ink-soft)]">
-                      {typingByConversation[conversation.id] ? "typing..." : preview}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 text-[10px] text-[var(--ink-soft)]">
-                    <span>{timestamp ? formatTime(timestamp) : ""}</span>
-                    {conversation.unreadCount ? (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] text-white">
-                        {conversation.unreadCount}
-                      </span>
-                    ) : null}
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        conversation.online ? "bg-[var(--accent)]" : "bg-[var(--panel-border)]"
-                      }`}
-                    />
-                  </div>
-                </button>
-              );
-            })}
-
-            {!filteredConversations.length ? (
-              <p className="px-3 py-6 text-center text-xs text-[var(--ink-soft)]">
-                No conversations yet.
-              </p>
-            ) : null}
-          </div>
-        </aside>
-
-        <div className="flex min-h-screen w-full flex-1 flex-col lg:flex-row">
-          <section className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-20 border-b border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+        <main className="flex-1">
+          {adminPanelOpen ? (
+            <section className="admin-panel px-4 py-6">
+              <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-[var(--ink)]">
-                    {activeConversation?.user?.name || "Select a chat"}
+                  <p className="text-xs uppercase tracking-[0.3em] text-[var(--ink-soft)]">
+                    Users
                   </p>
-                  <p className="text-xs text-[var(--ink-soft)]">
-                    {activeConversation?.online
-                      ? "online"
-                      : activeConversation?.user?.lastSeenAt
-                      ? `last seen ${formatLastSeen(activeConversation.user.lastSeenAt)}`
-                      : "offline"}
+                  <p className="text-lg font-semibold text-[var(--ink)]">
+                    {users.length}
                   </p>
                 </div>
               </div>
-            </header>
 
-            <main className="chat-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-              {activeConversationId ? (
-                <>
-                  <MessageList messages={messages} currentUserId={auth.user.id} />
-                  {typingPreview ? (
-                    <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
-                      {typingPreview}
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-6 py-8 text-center text-sm text-[var(--ink-soft)]">
-                  Select a conversation to start.
-                </div>
-              )}
-            </main>
-
-            <footer className="sticky bottom-0 z-20 border-t border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
-              <MessageInput
-                disabled={!status.connected || !activeConversationId}
-                value={draft}
-                onValueChange={setDraft}
-                onSend={handleSend}
-                onTyping={handleTyping}
-                typingPreview={""}
-                theme={theme}
+              <input
+                type="text"
+                value={userQuery}
+                onChange={(event) => setUserQuery(event.target.value)}
+                placeholder="Search users"
+                className="mb-4 w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-xs text-[var(--ink)]"
               />
-            </footer>
-          </section>
 
-          <aside className="admin-panel w-full border-t border-[var(--panel-border)] lg:w-96 lg:border-l lg:border-t-0">
-            <div className="flex items-center gap-2 border-b border-[var(--panel-border)] px-4 py-3">
-              {"users|requests".split("|").map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setPanelTab(tab)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                    panelTab === tab
-                      ? "bg-[var(--accent)] text-white"
-                      : "border border-[var(--panel-border)] text-[var(--ink)]"
-                  }`}
-                >
-                  {tab === "users" ? "Users" : "Reset requests"}
-                </button>
-              ))}
-            </div>
-
-            {panelTab === "users" ? (
-              <div className="max-h-[calc(100vh-160px)] overflow-y-auto px-4 py-4">
-                <input
-                  type="text"
-                  value={userQuery}
-                  onChange={(event) => setUserQuery(event.target.value)}
-                  placeholder="Search users"
-                  className="mb-4 w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-xs text-[var(--ink)]"
-                />
-
+              <div className="space-y-4">
                 {filteredUsers.map((user) => (
                   <div
                     key={user.id}
-                    className="mb-4 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-3"
+                    className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-4"
                   >
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold text-[var(--ink)]">{user.name}</p>
                         <p className="text-xs text-[var(--ink-soft)]">@{user.username}</p>
                       </div>
-                      <div className="text-right text-[10px] uppercase text-[var(--ink-soft)]">
-                        <p>{user.status}</p>
-                        <p>{user.online ? "online" : "offline"}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleStatusChange(user.id, "active")}
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-1 text-[10px] text-[var(--ink)]"
-                      >
-                        Activate
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStatusChange(user.id, "suspended")}
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-1 text-[10px] text-[var(--ink)]"
-                      >
-                        Suspend
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStatusChange(user.id, "banned")}
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-1 text-[10px] text-[var(--ink)]"
-                      >
-                        Ban
-                      </button>
+                      <span className="text-[10px] uppercase text-[var(--ink-soft)]">
+                        {user.online ? "online" : "offline"}
+                      </span>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
                       <input
-                        type={passwordVisible[user.id] ? "text" : "password"}
+                        type="text"
                         value={passwordDrafts[user.id] || ""}
                         onChange={(event) =>
                           setPasswordDrafts((prev) => ({
@@ -608,34 +470,24 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                             [user.id]: event.target.value
                           }))
                         }
-                        placeholder="Edit password"
+                        placeholder="Password"
                         className="flex-1 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-[11px] text-[var(--ink)]"
                       />
                       <button
                         type="button"
-                        onClick={() =>
-                          setPasswordVisible((prev) => ({
-                            ...prev,
-                            [user.id]: !prev[user.id]
-                          }))
-                        }
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-2 text-[10px] text-[var(--ink)]"
-                      >
-                        {passwordVisible[user.id] ? "Hide" : "Show"}
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handlePasswordReset(user.id)}
-                        className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white"
+                        className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-2 text-[var(--ink)]"
+                        aria-label="Edit password"
                       >
-                        Update
+                        <EditIcon />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteUser(user.id)}
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-2 text-[10px] text-[var(--ink)]"
+                        className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-2 text-[var(--accent-warm)]"
+                        aria-label="Delete user"
                       >
-                        Delete
+                        <TrashIcon />
                       </button>
                     </div>
                   </div>
@@ -645,85 +497,104 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                   <p className="text-center text-xs text-[var(--ink-soft)]">No users found.</p>
                 ) : null}
               </div>
-            ) : (
-              <div className="max-h-[calc(100vh-160px)] overflow-y-auto px-4 py-4">
-                {resetRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="mb-4 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--ink)]">
-                          {request.username}
-                        </p>
-                        <p className="text-xs text-[var(--ink-soft)]">{request.message}</p>
-                      </div>
-                      <span className="text-[10px] uppercase text-[var(--ink-soft)]">
-                        {request.status}
-                      </span>
-                    </div>
-                    <textarea
-                      value={requestNotes[request.id] ?? request.adminNotes ?? ""}
-                      onChange={(event) =>
-                        setRequestNotes((prev) => ({
-                          ...prev,
-                          [request.id]: event.target.value
-                        }))
-                      }
-                      placeholder="Admin notes"
-                      rows={2}
-                      className="mt-3 w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-[11px] text-[var(--ink)]"
-                    />
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateRequest(request.id, {
-                            status: "resolved",
-                            adminNotes: requestNotes[request.id] ?? request.adminNotes ?? ""
-                          })
-                        }
-                        className="rounded-full bg-[var(--accent)] px-3 py-1 text-[10px] font-semibold text-white"
-                      >
-                        Mark resolved
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateRequest(request.id, {
-                            status: "open",
-                            adminNotes: requestNotes[request.id] ?? request.adminNotes ?? ""
-                          })
-                        }
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-1 text-[10px] text-[var(--ink)]"
-                      >
-                        Re-open
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleUpdateRequest(request.id, {
-                            adminNotes: requestNotes[request.id] ?? request.adminNotes ?? ""
-                          })
-                        }
-                        className="rounded-full border border-[var(--panel-border)] px-3 py-1 text-[10px] text-[var(--ink)]"
-                      >
-                        Save note
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {!resetRequests.length ? (
-                  <p className="text-center text-xs text-[var(--ink-soft)]">
-                    No reset requests.
+            </section>
+          ) : activeConversationId ? (
+            <section className="flex min-h-[calc(100vh-120px)] flex-col">
+              <div className="border-b border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
+                <p className="text-sm font-semibold text-[var(--ink)]">
+                  {activeConversation?.user?.name || "Chat"}
+                </p>
+                <p className="text-xs text-[var(--ink-soft)]">
+                  {activeConversation?.online
+                    ? "online"
+                    : activeConversation?.user?.lastSeenAt
+                    ? `last seen ${formatLastSeen(activeConversation.user.lastSeenAt)}`
+                    : "offline"}
+                </p>
+              </div>
+              <div className="chat-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+                <MessageList messages={messages} currentUserId={auth.user.id} />
+                {typingPreview ? (
+                  <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
+                    {typingPreview}
                   </p>
                 ) : null}
               </div>
-            )}
-          </aside>
-        </div>
+              <div className="border-t border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
+                <MessageInput
+                  disabled={!status.connected || !activeConversationId}
+                  value={draft}
+                  onValueChange={setDraft}
+                  onSend={handleSend}
+                  onTyping={handleTyping}
+                  typingPreview={""}
+                  theme={theme}
+                />
+              </div>
+            </section>
+          ) : (
+            <section className="px-4 py-5">
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm font-semibold text-[var(--ink)]">Chats</p>
+              </div>
+              <input
+                type="text"
+                value={sidebarQuery}
+                onChange={(event) => setSidebarQuery(event.target.value)}
+                placeholder="Search chats"
+                className="mb-4 w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-xs text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              />
+              <div className="space-y-2">
+                {filteredConversations.map((conversation) => {
+                  const preview = conversation.lastMessage?.deleted
+                    ? "Message deleted"
+                    : conversation.lastMessage?.text || "";
+                  const timestamp = conversation.lastMessageAt || conversation.updatedAt;
+
+                  return (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() => setActiveConversationId(conversation.id)}
+                      className="flex w-full items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-3 text-left transition hover:-translate-y-0.5"
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
+                        {(conversation.user?.name || "?").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                          {conversation.user?.name || conversation.user?.username || "Unknown"}
+                        </p>
+                        <p className="truncate text-xs text-[var(--ink-soft)]">
+                          {typingByConversation[conversation.id] ? "typing..." : preview}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 text-[10px] text-[var(--ink-soft)]">
+                        <span>{timestamp ? formatTime(timestamp) : ""}</span>
+                        {conversation.unreadCount ? (
+                          <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] text-white">
+                            {conversation.unreadCount}
+                          </span>
+                        ) : null}
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            conversation.online ? "bg-[var(--accent)]" : "bg-[var(--panel-border)]"
+                          }`}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {!filteredConversations.length ? (
+                  <p className="text-center text-xs text-[var(--ink-soft)]">
+                    No conversations yet.
+                  </p>
+                ) : null}
+              </div>
+            </section>
+          )}
+        </main>
       </div>
     </div>
   );
@@ -831,4 +702,60 @@ function formatLastSeen(value) {
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${formatTime(
     value
   )}`;
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M15.7 5.3a1 1 0 0 1 0 1.4L10.4 12l5.3 5.3a1 1 0 1 1-1.4 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.4 0z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-16a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1zm0 18a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1zm10-8a1 1 0 0 1-1 1h-1a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1zM4 12a1 1 0 0 1-1 1H2a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1zm14.95-6.95a1 1 0 0 1 0 1.41l-.7.7a1 1 0 0 1-1.42-1.41l.71-.7a1 1 0 0 1 1.41 0zM7.17 18.83a1 1 0 0 1 0 1.41l-.7.71a1 1 0 0 1-1.41-1.42l.7-.7a1 1 0 0 1 1.41 0zm11.78 1.41a1 1 0 0 1-1.41 0l-.7-.7a1 1 0 0 1 1.41-1.41l.7.7a1 1 0 0 1 0 1.41zM6.46 6.46a1 1 0 0 1-1.41 0l-.7-.7A1 1 0 1 1 5.76 4.35l.7.7a1 1 0 0 1 0 1.41z" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3a.8.8 0 0 0-.9 1.1A7 7 0 1 0 19.9 15.4a.8.8 0 0 0 1.1-.9z" />
+    </svg>
+  );
+}
+
+function SignOutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M10 3a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-4a1 1 0 1 1 2 0v3h5V4h-5v3a1 1 0 1 1-2 0V3zm-4.7 7.3a1 1 0 0 1 1.4 0L9.4 13a1 1 0 0 1 0 1.4l-2.7 2.7a1 1 0 1 1-1.4-1.4L6.6 14H3a1 1 0 1 1 0-2h3.6l-1.3-1.3a1 1 0 0 1 0-1.4z" />
+    </svg>
+  );
+}
+
+function DotsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0-.001-3.999A2 2 0 0 0 12 14zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M4 17.3V20h2.7l8-8-2.7-2.7-8 8zM20.7 7.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-1.7 1.7 4 4 1.7-1.7z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M6 7h12l-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-4h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1zm-3 2h12a1 1 0 1 1 0 2H6a1 1 0 1 1 0-2z" />
+    </svg>
+  );
 }

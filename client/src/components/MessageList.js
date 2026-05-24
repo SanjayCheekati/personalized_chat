@@ -65,10 +65,15 @@ export default function MessageList({
         const isRemember = message.kind === "remember";
 
         if (isRemember) {
+          const senderLabel = message.text || "Someone";
+          const alreadyFormatted = senderLabel.includes("remembered you at");
+          const displayText = alreadyFormatted
+            ? senderLabel
+            : `${senderLabel} remembered you at ${formatTime(message.timestamp)} ❤️`;
           return (
             <div key={message.id || message.clientId} className="flex justify-center">
               <p className="text-center text-xs text-[var(--accent-warm)]">
-                {message.text}
+                {displayText}
               </p>
             </div>
           );
