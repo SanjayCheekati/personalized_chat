@@ -244,12 +244,25 @@ function createMessageStore({ db, cache } = {}) {
     return messageId;
   };
 
+  const count = async () => {
+    if (collection) {
+      return collection.countDocuments();
+    }
+
+    let total = 0;
+    rooms.forEach((messages) => {
+      total += messages.length;
+    });
+    return total;
+  };
+
   return {
     list,
     save,
     markSeen,
     markEdited,
-    markDeleted
+    markDeleted,
+    count
   };
 }
 

@@ -1,6 +1,9 @@
 const bcrypt = require("bcryptjs");
 const { nanoid } = require("nanoid");
 
+const DEFAULT_ROLE = "user";
+const DEFAULT_STATUS = "active";
+
 const state = {
   usersByEmail: new Map(),
   usersById: new Map(),
@@ -10,13 +13,22 @@ const state = {
 let usersCollection = null;
 
 function addUser(user) {
-  if (user.email) {
-    state.usersByEmail.set(user.email, user);
+  const normalized = {
+    ...user,
+    username: user.username ? user.username.toLowerCase() : "",
+    email: user.email ? user.email.toLowerCase() : ""
+  };
+
+  if (normalized.email) {
+    state.usersByEmail.set(normalized.email, normalized);
   }
-  if (user.username) {
-    state.usersByUsername.set(user.username, user);
+  if (normalized.username) {
+    state.usersByUsername.set(normalized.username, normalized);
   }
-  state.usersById.set(user.id, user);
+  if (normalized.id) {
+    state.usersById.set(normalized.id, normalized);
+  }
+  return normalized;
 }
 
 function normalizeUser(user) {
@@ -36,6 +48,16 @@ function normalizeUser(user) {
       : user.passwordSecondaryHash
       ? [user.passwordSecondaryHash]
       : [],
+    role: user.role || (user.isAdmin ? "admin" : DEFAULT_ROLE),
+    status: user.status || DEFAULT_STATUS,
+    createdAt: user.createdAt ? user.createdAt.toISOString?.() || user.createdAt : null,
+    updatedAt: user.updatedAt ? user.updatedAt.toISOString?.() || user.updatedAt : null,
+    lastLoginAt: user.lastLoginAt
+      ? user.lastLoginAt.toISOString?.() || user.lastLoginAt
+      : null,
+    lastSeenAt: user.lastSeenAt
+      ? user.lastSeenAt.toISOString?.() || user.lastSeenAt
+      : null,
     isGuest: Boolean(user.isGuest)
   };
 }
@@ -54,51 +76,96 @@ async function initUserStore(env, db) {
     }
   }
 
-  if (!env.SEED_USERS) {
-    return;
+  if (env.SEED_USERS) {
+    try {
+      const seedUsers = JSON.parse(env.SEED_USERS);
+      for (const seed of seedUsers) {
+        const username = (seed.username || seed.email || "").toLowerCase();
+        const email = (seed.email || "").toLowerCase();
+        const passwords = Array.isArray(seed.passwords)
+          ? seed.passwords
+          : seed.password
+          ? [seed.password]
+          : [];
+        const passwordHashes = seed.passwordHashes
+          ? seed.passwordHashes
+          : passwords.map((value) => bcrypt.hashSync(value, 10));
+        const passwordHash = seed.passwordHash
+          ? seed.passwordHash
+          : passwordHashes[0] || (seed.password ? bcrypt.hashSync(seed.password, 10) : "");
+        const now = new Date();
+
+        const user = {
+          id: seed.id || nanoid(12),
+          name: seed.name || username || email || "User",
+          username,
+          email,
+          passwordHash,
+          passwordHashes,
+          role: seed.role || DEFAULT_ROLE,
+          status: seed.status || DEFAULT_STATUS,
+          isGuest: false,
+          createdAt: seed.createdAt ? new Date(seed.createdAt) : now,
+          updatedAt: now,
+          lastLoginAt: seed.lastLoginAt ? new Date(seed.lastLoginAt) : null,
+          lastSeenAt: seed.lastSeenAt ? new Date(seed.lastSeenAt) : null
+        };
+
+        const normalized = addUser(user);
+
+        if (usersCollection && username) {
+          await usersCollection.updateOne(
+            { username },
+            { $setOnInsert: normalized },
+            { upsert: true }
+          );
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to seed users", error?.message || error);
+    }
   }
 
-  try {
-    const seedUsers = JSON.parse(env.SEED_USERS);
-    for (const seed of seedUsers) {
-      const username = (seed.username || seed.email || "").toLowerCase();
-      const email = (seed.email || "").toLowerCase();
-      const passwordHash = seed.passwordHash
-        ? seed.passwordHash
-        : seed.password
-        ? bcrypt.hashSync(seed.password, 10)
-        : "";
-      const passwords = Array.isArray(seed.passwords)
-        ? seed.passwords
-        : seed.password
-        ? [seed.password]
-        : [];
-      const passwordHashes = seed.passwordHashes
-        ? seed.passwordHashes
-        : passwords.map((value) => bcrypt.hashSync(value, 10));
+  await ensureAdminUser(env);
+}
 
-      const user = {
-        id: seed.id || nanoid(12),
-        name: seed.name || username || email || "User",
-        username,
-        email,
-        passwordHash,
-        passwordHashes,
-        isGuest: false
-      };
+async function ensureAdminUser(env) {
+  const adminUsername = String(env.ADMIN_USERNAME || "arjun").trim().toLowerCase();
+  const adminName = env.ADMIN_NAME || "Arjun";
+  const passwordHash = bcrypt.hashSync(env.ADMIN_PASSWORD || "Arjun@8096", 10);
+  const now = new Date();
 
-      addUser(user);
+  let existing = null;
+  if (usersCollection) {
+    existing = await usersCollection.findOne({ username: adminUsername });
+  } else {
+    existing = state.usersByUsername.get(adminUsername) || null;
+  }
 
-      if (usersCollection && email) {
-        await usersCollection.updateOne(
-          { email },
-          { $setOnInsert: user },
-          { upsert: true }
-        );
-      }
-    }
-  } catch {
-    return;
+  const baseUser = {
+    id: existing?.id || nanoid(12),
+    name: existing?.name || adminName,
+    username: adminUsername,
+    email: existing?.email || "",
+    passwordHash,
+    passwordHashes: [passwordHash],
+    role: "admin",
+    status: DEFAULT_STATUS,
+    isGuest: false,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    lastLoginAt: existing?.lastLoginAt || null,
+    lastSeenAt: existing?.lastSeenAt || null
+  };
+
+  const normalized = addUser(baseUser);
+
+  if (usersCollection) {
+    await usersCollection.updateOne(
+      { username: adminUsername },
+      { $set: normalized, $setOnInsert: { createdAt: normalized.createdAt } },
+      { upsert: true }
+    );
   }
 }
 
@@ -110,11 +177,14 @@ function createGuest({ displayName }) {
     email: "",
     passwordHash: "",
     passwordHashes: [],
+    role: DEFAULT_ROLE,
+    status: DEFAULT_STATUS,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     isGuest: true
   };
 
-  addUser(guest);
-  return guest;
+  return addUser(guest);
 }
 
 async function findByEmail(email) {
@@ -162,6 +232,149 @@ async function findById(id) {
   return state.usersById.get(id) || null;
 }
 
+async function listUsers() {
+  if (usersCollection) {
+    const docs = await usersCollection.find({}).sort({ createdAt: -1 }).toArray();
+    return docs.map(normalizeUser);
+  }
+
+  return Array.from(state.usersById.values()).map(normalizeUser);
+}
+
+async function countUsers() {
+  if (usersCollection) {
+    return usersCollection.countDocuments();
+  }
+
+  return state.usersById.size;
+}
+
+async function updateUser(userId, updates = {}) {
+  if (!userId) {
+    return null;
+  }
+
+  const allowed = {};
+  if (typeof updates.name === "string") {
+    allowed.name = updates.name;
+  }
+  if (typeof updates.status === "string") {
+    allowed.status = updates.status;
+  }
+  if (typeof updates.role === "string") {
+    allowed.role = updates.role;
+  }
+
+  if (usersCollection) {
+    const result = await usersCollection.findOneAndUpdate(
+      { id: userId },
+      { $set: { ...allowed, updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+    return result.value ? normalizeUser(result.value) : null;
+  }
+
+  const existing = state.usersById.get(userId);
+  if (!existing) {
+    return null;
+  }
+
+  const next = { ...existing, ...allowed, updatedAt: new Date() };
+  addUser(next);
+  return normalizeUser(next);
+}
+
+async function setPassword(userId, password) {
+  if (!userId || !password) {
+    return null;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const updates = { passwordHash, passwordHashes: [passwordHash], updatedAt: new Date() };
+
+  if (usersCollection) {
+    const result = await usersCollection.findOneAndUpdate(
+      { id: userId },
+      { $set: updates },
+      { returnDocument: "after" }
+    );
+    return result.value ? normalizeUser(result.value) : null;
+  }
+
+  const existing = state.usersById.get(userId);
+  if (!existing) {
+    return null;
+  }
+
+  const next = { ...existing, ...updates };
+  addUser(next);
+  return normalizeUser(next);
+}
+
+async function deleteUser(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  if (usersCollection) {
+    const result = await usersCollection.findOneAndUpdate(
+      { id: userId },
+      { $set: { status: "deleted", updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+    return result.value ? normalizeUser(result.value) : null;
+  }
+
+  const existing = state.usersById.get(userId);
+  if (!existing) {
+    return null;
+  }
+
+  const next = { ...existing, status: "deleted", updatedAt: new Date() };
+  addUser(next);
+  return normalizeUser(next);
+}
+
+async function touchLogin(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  const now = new Date();
+
+  if (usersCollection) {
+    await usersCollection.updateOne({ id: userId }, { $set: { lastLoginAt: now } });
+    return now.toISOString();
+  }
+
+  const existing = state.usersById.get(userId);
+  if (existing) {
+    const next = { ...existing, lastLoginAt: now };
+    addUser(next);
+  }
+  return now.toISOString();
+}
+
+async function touchLastSeen(userId, lastSeenAt) {
+  if (!userId) {
+    return null;
+  }
+
+  const seenAt = lastSeenAt ? new Date(lastSeenAt) : new Date();
+
+  if (usersCollection) {
+    await usersCollection.updateOne({ id: userId }, { $set: { lastSeenAt: seenAt } });
+    return seenAt.toISOString();
+  }
+
+  const existing = state.usersById.get(userId);
+  if (existing) {
+    const next = { ...existing, lastSeenAt: seenAt };
+    addUser(next);
+  }
+  return seenAt.toISOString();
+}
+
 async function verifyPassword(user, password) {
   if (!user || !password) {
     return false;
@@ -187,6 +400,13 @@ const userStore = {
   findByEmail,
   findByUsername,
   findById,
+  listUsers,
+  countUsers,
+  updateUser,
+  setPassword,
+  deleteUser,
+  touchLogin,
+  touchLastSeen,
   verifyPassword
 };
 

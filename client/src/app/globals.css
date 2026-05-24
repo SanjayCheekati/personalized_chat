@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -11,11 +13,29 @@
   --ink-soft: #8696a0;
   --accent: #00a884;
   --accent-soft: #0b846c;
+  --accent-warm: #ef4b5f;
   --bubble-me: #005c4b;
   --bubble-them: #202c33;
   --bubble-border: #2a3942;
   --tick-seen: #53bdeb;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+body[data-theme="light"] {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-dark: #f0f2f5;
+  --panel-border: #e4e6eb;
+  --ink: #1f2a34;
+  --ink-soft: #55606a;
+  --accent: #0b846c;
+  --accent-soft: #0a6a56;
+  --accent-warm: #d54855;
+  --bubble-me: #daf1e8;
+  --bubble-them: #ffffff;
+  --bubble-border: #e4e6eb;
+  --tick-seen: #0f7bdc;
+  --shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
 }
 
 * {
@@ -30,7 +50,7 @@ body {
 body {
   margin: 0;
   color: var(--ink);
-  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: "Plus Jakarta Sans", "Space Grotesk", "Segoe UI", sans-serif;
   background: var(--bg);
 }
 
@@ -92,4 +112,16 @@ body {
     radial-gradient(circle at 24px 24px, rgba(255, 255, 255, 0.03) 2px, transparent 0),
     radial-gradient(circle at 72px 72px, rgba(255, 255, 255, 0.02) 2px, transparent 0);
   background-size: 120px 120px;
+}
+
+.admin-shell {
+  background: var(--panel-dark);
+}
+
+.admin-sidebar {
+  background: var(--panel);
+}
+
+.admin-panel {
+  background: var(--panel);
 }

@@ -1,8 +1,17 @@
-async function listMessages(req, res, messageStore, env) {
+const { userStore } = require("../models/userStore");
+
+async function listMessages(req, res, messageStore, conversationStore, env) {
   try {
-    const roomId = req.query.roomId || env.DEFAULT_ROOM_ID;
+    const roomId = req.query.conversationId || req.query.roomId || env.DEFAULT_ROOM_ID;
     const limit = Math.min(Number(req.query.limit || 50), 200);
     const before = req.query.before || null;
+
+    if (conversationStore) {
+      const allowed = await conversationStore.isParticipant(roomId, req.user.id);
+      if (!allowed) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+    }
 
     const messages = await messageStore.list(roomId, { limit, before });
     res.json({ messages });
@@ -11,22 +20,44 @@ async function listMessages(req, res, messageStore, env) {
   }
 }
 
-async function postMessage(req, res, messageStore, env) {
+async function postMessage(req, res, messageStore, conversationStore, env) {
   try {
-    const roomId = req.body.roomId || env.DEFAULT_ROOM_ID;
+    const roomId = req.body.conversationId || req.body.roomId || env.DEFAULT_ROOM_ID;
     const text = String(req.body.text || "").trim();
 
     if (!text) {
       return res.status(400).json({ error: "empty_message" });
     }
 
+    if (conversationStore) {
+      const allowed = await conversationStore.isParticipant(roomId, req.user.id);
+      if (!allowed) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+    }
+
+    const receiverId = conversationStore
+      ? await conversationStore.getOtherParticipant(roomId, req.user.id)
+      : req.body.receiverId || null;
+
+    if (conversationStore && !receiverId) {
+      return res.status(404).json({ error: "receiver_missing" });
+    }
+
     const message = await messageStore.save({
       roomId,
       senderId: req.user.id,
-      receiverId: req.body.receiverId || null,
+      receiverId,
       text,
       clientId: req.body.clientId || null
     });
+
+    if (conversationStore) {
+      await conversationStore.touchLastMessage(roomId, message);
+      if (receiverId) {
+        await conversationStore.incrementUnread(roomId, receiverId);
+      }
+    }
 
     return res.json({ message });
   } catch {
@@ -34,4 +65,37 @@ async function postMessage(req, res, messageStore, env) {
   }
 }
 
-module.exports = { listMessages, postMessage };
+async function getConversation(req, res, conversationStore, env) {
+  if (!conversationStore) {
+    return res.status(400).json({ error: "conversation_unavailable" });
+  }
+
+  if (req.user?.role === "admin" || req.user?.isAdmin) {
+    return res.status(400).json({ error: "admin_not_supported" });
+  }
+
+  try {
+    const adminUser = await userStore.findByUsername(env.ADMIN_USERNAME);
+    if (!adminUser) {
+      return res.status(500).json({ error: "admin_missing" });
+    }
+
+    const conversation = await conversationStore.createOrFindDirect(
+      req.user.id,
+      adminUser.id
+    );
+
+    return res.json({
+      conversation,
+      peer: {
+        id: adminUser.id,
+        name: adminUser.name,
+        username: adminUser.username
+      }
+    });
+  } catch {
+    return res.status(500).json({ error: "conversation_failed" });
+  }
+}
+
+module.exports = { listMessages, postMessage, getConversation };

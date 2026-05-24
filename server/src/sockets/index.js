@@ -1,7 +1,12 @@
 const { Server } = require("socket.io");
 const { verifySocketToken } = require("../middleware/auth");
 
-function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
+const ADMIN_ROOM = "admin";
+
+function initSocket(
+  server,
+  { env, messageStore, conversationStore, presenceStore, userStore, corsOrigin }
+) {
   const io = new Server(server, {
     cors: {
       origin: corsOrigin || env.CLIENT_ORIGIN
@@ -10,14 +15,19 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
 
   io.use((socket, next) => {
     const { token, roomId } = socket.handshake.auth || {};
-    if (!token || !roomId) {
+    if (!token) {
       return next(new Error("missing_auth"));
     }
 
     try {
       const user = verifySocketToken(token, env);
+      const isAdmin = user?.role === "admin" || user?.isAdmin;
+      if (!roomId && !isAdmin) {
+        return next(new Error("missing_room"));
+      }
       socket.data.user = user;
-      socket.data.roomId = roomId;
+      socket.data.roomId = roomId || null;
+      socket.data.isAdmin = isAdmin;
       return next();
     } catch {
       return next(new Error("invalid_auth"));
@@ -25,22 +35,102 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
   });
 
   io.on("connection", async (socket) => {
-    const { user, roomId } = socket.data;
+    const { user, roomId, isAdmin } = socket.data;
 
-    if (!(await presenceStore.canJoin(roomId, user.id))) {
-      socket.emit("room_full");
-      socket.disconnect();
-      return;
+    await presenceStore.registerOnline(user.id, socket.id);
+
+    io.to(ADMIN_ROOM).emit("admin_presence_update", {
+      userId: user.id,
+      online: true,
+      lastSeen: null
+    });
+
+    if (isAdmin) {
+      socket.join(ADMIN_ROOM);
     }
 
-    await presenceStore.register(roomId, user.id, socket.id);
-    socket.join(roomId);
+    if (roomId) {
+      if (conversationStore) {
+        const allowed = await conversationStore.isParticipant(roomId, user.id);
+        if (!allowed) {
+          socket.emit("room_forbidden");
+          socket.disconnect();
+          return;
+        }
+      }
 
-    const otherUserId = await presenceStore.getOtherUserId(roomId, user.id);
-    if (otherUserId) {
-      socket.emit("user_online", { userId: otherUserId });
+      if (!(await presenceStore.canJoin(roomId, user.id))) {
+        socket.emit("room_full");
+        socket.disconnect();
+        return;
+      }
+
+      await presenceStore.register(roomId, user.id, socket.id);
+      socket.join(roomId);
+
+      const otherUserId = await presenceStore.getOtherUserId(roomId, user.id);
+      if (otherUserId) {
+        socket.emit("user_online", { userId: otherUserId });
+      }
+      socket.to(roomId).emit("user_online", { userId: user.id });
     }
-    socket.to(roomId).emit("user_online", { userId: user.id });
+
+    socket.on("join_conversation", async (payload, ack) => {
+      if (!isAdmin) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "forbidden" });
+        }
+        return;
+      }
+
+      const conversationId = payload?.conversationId;
+      if (!conversationId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_conversation" });
+        }
+        return;
+      }
+
+      const allowed = conversationStore
+        ? await conversationStore.isParticipant(conversationId, user.id)
+        : true;
+      if (!allowed) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "forbidden" });
+        }
+        return;
+      }
+
+      if (socket.data.roomId) {
+        const previous = await presenceStore.unregister(socket.id);
+        if (previous?.noSocketsLeft) {
+          const lastSeen = new Date().toISOString();
+          socket.to(previous.roomId).emit("user_offline", { userId: user.id, lastSeen });
+        }
+        socket.leave(socket.data.roomId);
+      }
+
+      if (!(await presenceStore.canJoin(conversationId, user.id))) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "room_full" });
+        }
+        return;
+      }
+
+      socket.data.roomId = conversationId;
+      await presenceStore.register(conversationId, user.id, socket.id);
+      socket.join(conversationId);
+
+      const otherUserId = await presenceStore.getOtherUserId(conversationId, user.id);
+      if (otherUserId) {
+        socket.emit("user_online", { userId: otherUserId });
+      }
+      socket.to(conversationId).emit("user_online", { userId: user.id });
+
+      if (typeof ack === "function") {
+        ack({ ok: true, roomId: conversationId });
+      }
+    });
 
     socket.on("send_message", async (payload, ack) => {
       const text = String(payload?.text || "").trim();
@@ -51,8 +141,24 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
         return;
       }
 
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
       try {
-        const receiverId = await presenceStore.getOtherUserId(roomId, user.id);
+        const receiverId = conversationStore
+          ? await conversationStore.getOtherParticipant(activeRoomId, user.id)
+          : await presenceStore.getOtherUserId(activeRoomId, user.id);
+        if (conversationStore && !receiverId) {
+          if (typeof ack === "function") {
+            ack({ ok: false, error: "recipient_missing" });
+          }
+          return;
+        }
         const replyTo = payload?.replyTo
           ? {
               id: payload.replyTo.id,
@@ -61,7 +167,7 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
             }
           : null;
         const message = await messageStore.save({
-          roomId,
+          roomId: activeRoomId,
           senderId: user.id,
           receiverId,
           text,
@@ -69,7 +175,15 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
           replyTo
         });
 
-        io.to(roomId).emit("receive_message", message);
+        if (conversationStore) {
+          await conversationStore.touchLastMessage(activeRoomId, message);
+          if (receiverId) {
+            await conversationStore.incrementUnread(activeRoomId, receiverId);
+          }
+        }
+
+        io.to(activeRoomId).emit("receive_message", message);
+        await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
         if (typeof ack === "function") {
           ack({ ok: true, message });
@@ -82,11 +196,33 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
     });
 
     socket.on("typing", () => {
-      socket.to(roomId).emit("user_typing", { userId: user.id, typing: true });
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        return;
+      }
+      socket.to(activeRoomId).emit("user_typing", { userId: user.id, typing: true });
+      if (!isAdmin) {
+        io.to(ADMIN_ROOM).emit("admin_typing", {
+          conversationId: activeRoomId,
+          userId: user.id,
+          typing: true
+        });
+      }
     });
 
     socket.on("stop_typing", () => {
-      socket.to(roomId).emit("user_typing", { userId: user.id, typing: false });
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        return;
+      }
+      socket.to(activeRoomId).emit("user_typing", { userId: user.id, typing: false });
+      if (!isAdmin) {
+        io.to(ADMIN_ROOM).emit("admin_typing", {
+          conversationId: activeRoomId,
+          userId: user.id,
+          typing: false
+        });
+      }
     });
 
     socket.on("seen_message", async (payload) => {
@@ -96,10 +232,19 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
       }
       const seenAt = payload?.seenAt || new Date().toISOString();
 
-      await messageStore.markSeen(roomId, ids, seenAt);
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        return;
+      }
+
+      await messageStore.markSeen(activeRoomId, ids, seenAt);
+      if (conversationStore) {
+        await conversationStore.resetUnread(activeRoomId, user.id);
+      }
       socket
-        .to(roomId)
+        .to(activeRoomId)
         .emit("message_seen", { messageIds: ids, seenBy: user.id, seenAt });
+      await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
     });
 
     socket.on("edit_message", async (payload, ack) => {
@@ -112,8 +257,16 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
         return;
       }
 
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
       try {
-        const updated = await messageStore.markEdited(roomId, messageId, user.id, text);
+        const updated = await messageStore.markEdited(activeRoomId, messageId, user.id, text);
         if (!updated) {
           if (typeof ack === "function") {
             ack({ ok: false, error: "edit_forbidden" });
@@ -121,7 +274,15 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
           return;
         }
 
-        io.to(roomId).emit("message_edited", { message: updated });
+        if (conversationStore) {
+          await conversationStore.updateLastMessageText(activeRoomId, messageId, {
+            text: updated.text,
+            edited: true
+          });
+        }
+
+        io.to(activeRoomId).emit("message_edited", { message: updated });
+        await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
         if (typeof ack === "function") {
           ack({ ok: true, message: updated });
         }
@@ -141,9 +302,24 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
         return;
       }
 
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
       try {
-        await messageStore.markDeleted(roomId, messageId, user.id);
-        io.to(roomId).emit("message_deleted", { messageId, deletedBy: user.id });
+        await messageStore.markDeleted(activeRoomId, messageId, user.id);
+        if (conversationStore) {
+          await conversationStore.updateLastMessageText(activeRoomId, messageId, {
+            deleted: true,
+            text: "This message was deleted."
+          });
+        }
+        io.to(activeRoomId).emit("message_deleted", { messageId, deletedBy: user.id });
+        await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
         if (typeof ack === "function") {
           ack({ ok: true });
@@ -159,12 +335,44 @@ function initSocket(server, { env, messageStore, presenceStore, corsOrigin }) {
       const result = await presenceStore.unregister(socket.id);
       if (result?.noSocketsLeft) {
         const lastSeen = new Date().toISOString();
-        socket.to(roomId).emit("user_offline", { userId: user.id, lastSeen });
+        socket.to(result.roomId).emit("user_offline", { userId: user.id, lastSeen });
+        if (userStore?.touchLastSeen) {
+          await userStore.touchLastSeen(user.id, lastSeen);
+        }
+      }
+
+      const offline = await presenceStore.unregisterOnline(socket.id);
+      if (offline?.isOffline) {
+        io.to(ADMIN_ROOM).emit("admin_presence_update", {
+          userId: offline.userId,
+          online: false,
+          lastSeen: new Date().toISOString()
+        });
       }
     });
   });
 
   return io;
+}
+
+async function emitAdminConversationUpdate(io, conversationStore, conversationId) {
+  if (!conversationStore) {
+    return;
+  }
+
+  const conversation = await conversationStore.getById(conversationId);
+  if (!conversation) {
+    return;
+  }
+
+  io.to(ADMIN_ROOM).emit("admin_conversation_update", {
+    id: conversation.id,
+    participants: conversation.participants,
+    lastMessage: conversation.lastMessage,
+    lastMessageAt: conversation.lastMessageAt,
+    unreadBy: conversation.unreadBy || {},
+    updatedAt: conversation.updatedAt
+  });
 }
 
 module.exports = { initSocket };

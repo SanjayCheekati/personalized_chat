@@ -13,10 +13,13 @@ const { connectRedis, createCache } = require("./db/redis");
 const { createRateLimiter } = require("./middleware/rateLimit");
 const { authRouter } = require("./routes/auth");
 const { chatRouter } = require("./routes/chat");
+const { adminRouter } = require("./routes/admin");
 const { initSocket } = require("./sockets");
 const { initUserStore } = require("./models/userStore");
 const { createMessageStore } = require("./models/messageStore");
 const { createPresenceStore } = require("./models/presenceStore");
+const { initConversationStore, conversationStore } = require("./models/conversationStore");
+const { createResetRequestStore } = require("./models/resetRequestStore");
 
 const app = express();
 const server = http.createServer(app);
@@ -56,6 +59,7 @@ async function start() {
   }
 
   await initUserStore(env, mongo.db);
+  await initConversationStore(mongo.db);
 
   const cache = createCache(redis.client, env.REDIS_PREFIX);
   const messageStore = createMessageStore({ db: mongo.db, cache });
@@ -63,15 +67,32 @@ async function start() {
     redisClient: redis.client,
     prefix: env.REDIS_PREFIX
   });
+  const resetRequestStore = createResetRequestStore({ db: mongo.db });
 
   app.get("/health", (req, res) => {
     res.json({ ok: true });
   });
 
-  app.use(authRouter(env));
-  app.use(chatRouter(env, messageStore));
+  app.use(authRouter(env, conversationStore, resetRequestStore));
+  app.use(chatRouter(env, messageStore, conversationStore));
+  app.use(
+    adminRouter(env, {
+      conversationStore,
+      userStore: require("./models/userStore").userStore,
+      presenceStore,
+      resetRequestStore,
+      messageStore
+    })
+  );
 
-  initSocket(server, { env, messageStore, presenceStore, corsOrigin });
+  initSocket(server, {
+    env,
+    messageStore,
+    conversationStore,
+    presenceStore,
+    userStore: require("./models/userStore").userStore,
+    corsOrigin
+  });
 
   const shutdown = async () => {
     if (redis.client) {

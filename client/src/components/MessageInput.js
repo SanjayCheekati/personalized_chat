@@ -1,25 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-
-const EMOJIS = [
-  "😀",
-  "😂",
-  "❤️",
-  "😍",
-  "😭",
-  "🥺",
-  "😘",
-  "😉",
-  "👍",
-  "🙏",
-  "🔥",
-  "🎉",
-  "😅",
-  "😎",
-  "🥲",
-  "🤍",
-  "😴",
-  "🤔"
-];
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 
 export default function MessageInput({
   disabled,
@@ -31,11 +12,27 @@ export default function MessageInput({
   onCancelReply,
   editingMessage,
   onCancelEdit,
-  typingPreview
+  typingPreview,
+  theme = "dark"
 }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const pickerRef = useRef(null);
   const toggleRef = useRef(null);
+  const textareaRef = useRef(null);
+  const selectionRef = useRef({ start: 0, end: 0 });
+
+  const focusInput = () => {
+    if (disabled) {
+      return;
+    }
+
+    const input = textareaRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+  };
 
   const handleChange = (event) => {
     const next = event.target.value;
@@ -51,6 +48,9 @@ export default function MessageInput({
     onValueChange?.("");
     onTyping?.(false);
     setShowEmoji(false);
+    requestAnimationFrame(() => {
+      focusInput();
+    });
   };
 
   const handleKeyDown = (event) => {
@@ -60,10 +60,35 @@ export default function MessageInput({
     }
   };
 
+  const trackSelection = () => {
+    const input = textareaRef.current;
+    if (!input) {
+      return;
+    }
+    selectionRef.current = {
+      start: input.selectionStart ?? 0,
+      end: input.selectionEnd ?? 0
+    };
+  };
+
   const appendEmoji = (emoji) => {
-    const next = `${value}${emoji}`;
+    const { start, end } = selectionRef.current;
+    const safeStart = Math.max(0, start);
+    const safeEnd = Math.max(0, end);
+    const next = `${value.slice(0, safeStart)}${emoji}${value.slice(safeEnd)}`;
+    const nextCursor = safeStart + emoji.length;
     onValueChange?.(next);
     onTyping?.(true);
+
+    requestAnimationFrame(() => {
+      const input = textareaRef.current;
+      if (!input) {
+        return;
+      }
+      input.focus();
+      input.setSelectionRange(nextCursor, nextCursor);
+      selectionRef.current = { start: nextCursor, end: nextCursor };
+    });
   };
 
   useEffect(() => {
@@ -80,8 +105,16 @@ export default function MessageInput({
     };
 
     document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
   }, [showEmoji]);
+
+  useEffect(() => {
+    focusInput();
+  }, [disabled]);
 
   return (
     <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2">
@@ -128,25 +161,31 @@ export default function MessageInput({
           {showEmoji ? (
             <div
               ref={pickerRef}
-              className="absolute bottom-[3.1rem] left-0 z-10 grid w-56 grid-cols-9 gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-glow"
+              className="absolute bottom-[3.3rem] left-0 z-10 w-[320px] overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] shadow-glow"
             >
-              {EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => appendEmoji(emoji)}
-                  className="text-lg"
-                >
-                  {emoji}
-                </button>
-              ))}
+              <Picker
+                data={data}
+                theme={theme}
+                onEmojiSelect={(emoji) => appendEmoji(emoji.native || "")}
+                previewPosition="none"
+                navPosition="top"
+                searchPosition="sticky"
+                skinTonePosition="search"
+                perLine={8}
+                emojiSize={20}
+              />
             </div>
           ) : null}
 
           <textarea
+            ref={textareaRef}
             value={value}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onClick={trackSelection}
+            onKeyUp={trackSelection}
+            onSelect={trackSelection}
+            onFocus={trackSelection}
             rows={1}
             placeholder={disabled ? "Connecting..." : "Type a message"}
             className="min-h-[44px] w-full resize-none rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] py-2 pl-10 pr-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"

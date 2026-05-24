@@ -63,6 +63,8 @@ async function seedUsers() {
       email: (seed.email || "").toLowerCase(),
       passwordHash: passwordHashes[0] || "",
       passwordHashes,
+      role: seed.role || "user",
+      status: seed.status || "active",
       isGuest: false,
       updatedAt: new Date()
     };

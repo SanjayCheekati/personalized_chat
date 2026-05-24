@@ -20,7 +20,21 @@ export default function MessageList({
   const displayItems = useMemo(() => buildDisplayItems(messages), [messages]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const marker = endRef.current;
+    if (!marker) {
+      return;
+    }
+
+    const container = marker.closest(".chat-scroll");
+    if (!container) {
+      return;
+    }
+
+    const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const nearBottom = distance < 140;
+    if (nearBottom) {
+      marker.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages.length]);
 
   if (!messages.length) {
@@ -61,7 +75,7 @@ export default function MessageList({
                   : "bg-[var(--bubble-them)] text-[var(--ink)]"
               }`}
             >
-              {message.id && !isDeleted ? (
+              {message.id && !isDeleted && onReply ? (
                 <button
                   type="button"
                   onClick={() => onReply?.(message)}
@@ -94,16 +108,18 @@ export default function MessageList({
                 </span>
                 {isMine ? <StatusTicks status={message.status} /> : null}
               </div>
-              {!isDeleted ? (
+              {!isDeleted && (onEdit || onDelete) ? (
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-[var(--ink-soft)] opacity-0 transition group-hover:opacity-100">
-                  {isMine && message.id ? (
+                  {isMine && message.id && onEdit ? (
                     <>
                       <button type="button" onClick={() => onEdit?.(message)}>
                         Edit
                       </button>
-                      <button type="button" onClick={() => onDelete?.(message)}>
-                        Delete
-                      </button>
+                      {onDelete ? (
+                        <button type="button" onClick={() => onDelete?.(message)}>
+                          Delete
+                        </button>
+                      ) : null}
                     </>
                   ) : null}
                 </div>

@@ -1,35 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import ChatShell from "../components/ChatShell";
+import AdminDashboard from "../components/AdminDashboard";
 import MessageInput from "../components/MessageInput";
 import MessageList from "../components/MessageList";
 import { createSocket } from "../socket/client";
-import { fetchMessages, loginWithPassword } from "../services/api";
+import {
+  fetchConversation,
+  fetchMessages,
+  loginWithPassword,
+  requestPasswordReset
+} from "../services/api";
 
 const AUTH_KEY = "flashchat.auth";
 const DEFAULT_PEER = {
   id: null,
-  name: "Partner",
+  name: "Arjun",
   online: false,
   typing: false,
   lastSeen: null
 };
 
 export default function Home() {
+  const router = useRouter();
   const [auth, setAuth] = useState(null);
   const [messages, setMessages] = useState([]);
   const [peer, setPeer] = useState(DEFAULT_PEER);
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState("dark");
   const [loginForm, setLoginForm] = useState({
     username: "",
     password: ""
   });
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotForm, setForgotForm] = useState({ username: "", message: "" });
+  const [forgotStatus, setForgotStatus] = useState({ loading: false, error: "", done: false });
   const [status, setStatus] = useState({
     connecting: false,
     connected: false,
@@ -37,6 +47,8 @@ export default function Home() {
   });
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
+  const isAdmin =
+    auth?.user?.role === "admin" || auth?.user?.username?.toLowerCase() === "arjun";
 
   useEffect(() => {
     const stored = localStorage.getItem(AUTH_KEY);
@@ -52,17 +64,38 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!auth?.user?.username) {
+    const storedTheme = localStorage.getItem("flashchat.theme") || "dark";
+    setTheme(storedTheme);
+    document.body.dataset.theme = storedTheme;
+  }, []);
+
+  useEffect(() => {
+    document.body.dataset.theme = theme;
+    localStorage.setItem("flashchat.theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!auth?.user) {
+      return;
+    }
+    if (isAdmin) {
       return;
     }
 
-    const username = auth.user.username.toLowerCase();
-    const name = username === "saba" ? "Arjun" : username === "arjun" ? "Saba" : DEFAULT_PEER.name;
-    setPeer((prev) => ({ ...prev, name }));
+    if (auth.peer) {
+      setPeer({
+        ...DEFAULT_PEER,
+        id: auth.peer.id || null,
+        name: auth.peer.name || DEFAULT_PEER.name
+      });
+      return;
+    }
+
+    setPeer((prev) => ({ ...prev, name: DEFAULT_PEER.name }));
   }, [auth]);
 
   useEffect(() => {
-    if (!auth) {
+    if (!auth || !auth.roomId) {
       return;
     }
 
@@ -83,7 +116,32 @@ export default function Home() {
   }, [auth]);
 
   useEffect(() => {
-    if (!auth) {
+    if (!auth || isAdmin) {
+      return;
+    }
+
+    if (auth.roomId && auth.peer) {
+      return;
+    }
+
+    fetchConversation(auth.token)
+      .then((data) => {
+        if (!data?.conversation) {
+          return;
+        }
+        const nextAuth = {
+          ...auth,
+          roomId: data.conversation.id,
+          peer: data.peer || auth.peer
+        };
+        localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
+        setAuth(nextAuth);
+      })
+      .catch(() => {});
+  }, [auth]);
+
+  useEffect(() => {
+    if (!auth || !auth.roomId) {
       return;
     }
 
@@ -187,18 +245,6 @@ export default function Home() {
     setMessages((prev) => markMessagesSeen(prev, unseen, seenAt));
   }, [messages, auth]);
 
-  const filteredMessages = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return messages;
-    }
-
-    return messages.filter((message) => {
-      const text = (message.text || "").toLowerCase();
-      const replyText = (message.replyTo?.text || "").toLowerCase();
-      return text.includes(query) || replyText.includes(query);
-    });
-  }, [messages, searchQuery]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -210,7 +256,8 @@ export default function Home() {
       const nextAuth = {
         token: data.token,
         user: data.user,
-        roomId: data.roomId
+        roomId: data.roomId,
+        peer: data.peer || null
       };
 
       localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
@@ -230,6 +277,23 @@ export default function Home() {
     setReplyTarget(null);
     setEditingMessage(null);
     setStatus({ connecting: false, connected: false, error: "" });
+  };
+
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    setForgotStatus({ loading: true, error: "", done: false });
+
+    try {
+      await requestPasswordReset(forgotForm.username, forgotForm.message);
+      setForgotStatus({ loading: false, error: "", done: true });
+      setForgotForm({ username: "", message: "" });
+    } catch (error) {
+      setForgotStatus({
+        loading: false,
+        error: error?.message || "request_failed",
+        done: false
+      });
+    }
   };
 
   const handleSend = (text) => {
@@ -319,15 +383,13 @@ export default function Home() {
     });
   };
 
-  const handleSearchToggle = () => {
-    setSearchOpen((prev) => {
-      const next = !prev;
-      if (!next) {
-        setSearchQuery("");
-      }
-      return next;
-    });
+  const handleOpenGames = () => {
     setMenuOpen(false);
+    router.push("/games");
+  };
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
   const handleTyping = (hasText) => {
@@ -399,12 +461,71 @@ export default function Home() {
               Sign in
             </button>
 
+            <button
+              type="button"
+              onClick={() => setForgotOpen((prev) => !prev)}
+              className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-xs font-semibold text-[var(--ink)]"
+            >
+              Forgot password?
+            </button>
+
             {status.error ? (
               <p className="text-sm text-[var(--accent-warm)]">{status.error}</p>
             ) : null}
           </form>
+
+          {forgotOpen ? (
+            <form onSubmit={handleForgotPassword} className="mt-6 space-y-3">
+              <input
+                type="text"
+                required
+                value={forgotForm.username}
+                onChange={(event) =>
+                  setForgotForm((prev) => ({ ...prev, username: event.target.value }))
+                }
+                placeholder="Username"
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              />
+              <textarea
+                required
+                value={forgotForm.message}
+                onChange={(event) =>
+                  setForgotForm((prev) => ({ ...prev, message: event.target.value }))
+                }
+                placeholder="Describe the issue"
+                rows={3}
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              />
+              <button
+                type="submit"
+                disabled={forgotStatus.loading}
+                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-xs font-semibold text-white shadow-glow"
+              >
+                {forgotStatus.loading ? "Sending..." : "Send request"}
+              </button>
+              {forgotStatus.error ? (
+                <p className="text-xs text-[var(--accent-warm)]">{forgotStatus.error}</p>
+              ) : null}
+              {forgotStatus.done ? (
+                <p className="text-xs text-[var(--ink-soft)]">
+                  Request submitted. Arjun will review it soon.
+                </p>
+              ) : null}
+            </form>
+          ) : null}
         </div>
       </div>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <AdminDashboard
+        auth={auth}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        onLogout={handleLogout}
+      />
     );
   }
 
@@ -422,9 +543,9 @@ export default function Home() {
     <div className="page-shell">
       <ChatShell
         header={
-          <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex w-full flex-nowrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ef4b5f] text-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm text-[#ef4b5f]">
                 ❤️
               </div>
               <div className="min-w-0">
@@ -432,36 +553,24 @@ export default function Home() {
                 <p className="text-xs text-[var(--ink-soft)]">{headerStatus}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {searchOpen ? (
-                <div className="flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-1.5">
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search"
-                    className="w-20 bg-transparent text-xs text-[var(--ink)] outline-none sm:w-28"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSearchToggle}
-                    className="text-[var(--ink-soft)]"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : null}
-
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={handleSearchToggle}
+                onClick={handleToggleTheme}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-[10px] font-semibold text-[var(--ink)]"
+              >
+                {theme === "light" ? "Dark" : "Light"}
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenGames}
                 className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
-                aria-label="Search"
+                aria-label="Games"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
-                  <path d="M15.5 14h-.79l-.28-.27A6 6 0 1 0 14 15.5l.27.28v.79L20 21.5 21.5 20zm-6 0A4.5 4.5 0 1 1 10 5a4.5 4.5 0 0 1-.5 9z" />
+                  <path d="M7.5 7.5h9A3.5 3.5 0 0 1 20 11v2.5A3.5 3.5 0 0 1 16.5 17h-9A3.5 3.5 0 0 1 4 13.5V11a3.5 3.5 0 0 1 3.5-3.5zm2 2a.75.75 0 1 0 0 1.5h1.5a.75.75 0 1 0 0-1.5H9.5zm-2 2.5a.75.75 0 1 0 0 1.5H9a.75.75 0 1 0 0-1.5H7.5zm9-1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-1.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z" />
                 </svg>
               </button>
-
               <div className="relative">
                 <button
                   type="button"
@@ -506,11 +615,12 @@ export default function Home() {
               setDraft("");
             }}
             typingPreview={typingPreview}
+            theme={theme}
           />
         }
       >
         <MessageList
-          messages={filteredMessages}
+          messages={messages}
           currentUserId={auth.user.id}
           onDelete={handleDelete}
           onReply={(message) => {

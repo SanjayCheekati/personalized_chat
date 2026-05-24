@@ -19,8 +19,20 @@ function createAuthMiddleware(env) {
   };
 }
 
+function createAdminMiddleware(env) {
+  const auth = createAuthMiddleware(env);
+  return (req, res, next) => {
+    auth(req, res, () => {
+      if (req.user?.role === "admin" || req.user?.isAdmin) {
+        return next();
+      }
+      return res.status(403).json({ error: "forbidden" });
+    });
+  };
+}
+
 function verifySocketToken(token, env) {
   return jwt.verify(token, env.JWT_SECRET);
 }
 
-module.exports = { createAuthMiddleware, verifySocketToken };
+module.exports = { createAuthMiddleware, createAdminMiddleware, verifySocketToken };

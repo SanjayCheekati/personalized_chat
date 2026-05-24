@@ -5,9 +5,14 @@ const DEFAULT_URL =
   process.env.NEXT_PUBLIC_API_BASE ||
   "http://localhost:4000";
 
-export function createSocket({ token, roomId }) {
+export function createSocket({ token, roomId } = {}) {
+  const auth = { token };
+  if (roomId) {
+    auth.roomId = roomId;
+  }
+
   return io(DEFAULT_URL, {
-    auth: { token, roomId },
+    auth,
     transports: ["websocket"],
     reconnection: true,
     reconnectionAttempts: Infinity,

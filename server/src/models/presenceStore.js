@@ -1,6 +1,8 @@
 function createMemoryPresenceStore() {
   const rooms = new Map();
   const socketIndex = new Map();
+  const onlineUsers = new Map();
+  const onlineSocketIndex = new Map();
 
   const getRoomUsers = (roomId) => {
     if (!rooms.has(roomId)) {
@@ -52,6 +54,32 @@ function createMemoryPresenceStore() {
     return { roomId, userId, noSocketsLeft };
   };
 
+  const registerOnline = (userId, socketId) => {
+    if (!onlineUsers.has(userId)) {
+      onlineUsers.set(userId, new Set());
+    }
+    onlineUsers.get(userId).add(socketId);
+    onlineSocketIndex.set(socketId, userId);
+  };
+
+  const unregisterOnline = (socketId) => {
+    const userId = onlineSocketIndex.get(socketId);
+    if (!userId) {
+      return null;
+    }
+
+    const sockets = onlineUsers.get(userId);
+    if (sockets) {
+      sockets.delete(socketId);
+      if (sockets.size === 0) {
+        onlineUsers.delete(userId);
+      }
+    }
+
+    onlineSocketIndex.delete(socketId);
+    return { userId, isOffline: !onlineUsers.has(userId) };
+  };
+
   const getOtherUserId = (roomId, userId) => {
     const users = rooms.get(roomId);
     if (!users) {
@@ -71,12 +99,20 @@ function createMemoryPresenceStore() {
     return users ? users.size : 0;
   };
 
+  const isUserOnline = (userId) => onlineUsers.has(userId);
+
+  const listOnlineUserIds = () => Array.from(onlineUsers.keys());
+
   return {
     canJoin,
     register,
     unregister,
     getOtherUserId,
-    getUniqueUserCount
+    getUniqueUserCount,
+    registerOnline,
+    unregisterOnline,
+    isUserOnline,
+    listOnlineUserIds
   };
 }
 
@@ -89,7 +125,11 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
         memory.register(roomId, userId, socketId),
       unregister: async (socketId) => memory.unregister(socketId),
       getOtherUserId: async (roomId, userId) => memory.getOtherUserId(roomId, userId),
-      getUniqueUserCount: async (roomId) => memory.getUniqueUserCount(roomId)
+      getUniqueUserCount: async (roomId) => memory.getUniqueUserCount(roomId),
+      registerOnline: async (userId, socketId) => memory.registerOnline(userId, socketId),
+      unregisterOnline: async (socketId) => memory.unregisterOnline(socketId),
+      isUserOnline: async (userId) => memory.isUserOnline(userId),
+      listOnlineUserIds: async () => memory.listOnlineUserIds()
     };
   }
 
@@ -97,6 +137,9 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
   const roomKey = (roomId) => `${base}:room:${roomId}`;
   const userKey = (roomId, userId) => `${base}:room:${roomId}:user:${userId}`;
   const socketKey = (socketId) => `${base}:socket:${socketId}`;
+  const onlineUsersKey = `${base}:online:users`;
+  const onlineUserKey = (userId) => `${base}:online:user:${userId}`;
+  const onlineSocketKey = (socketId) => `${base}:online:socket:${socketId}`;
   const socketTtl = 60 * 60;
 
   const canJoin = async (roomId, userId) => {
@@ -141,6 +184,29 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
     return { roomId, userId, noSocketsLeft: remaining === 0 };
   };
 
+  const registerOnline = async (userId, socketId) => {
+    await redisClient.sAdd(onlineUsersKey, userId);
+    await redisClient.sAdd(onlineUserKey(userId), socketId);
+    await redisClient.setEx(onlineSocketKey(socketId), socketTtl, userId);
+    await redisClient.expire(onlineUserKey(userId), socketTtl);
+  };
+
+  const unregisterOnline = async (socketId) => {
+    const userId = await redisClient.get(onlineSocketKey(socketId));
+    if (!userId) {
+      return null;
+    }
+
+    await redisClient.del(onlineSocketKey(socketId));
+    await redisClient.sRem(onlineUserKey(userId), socketId);
+    const remaining = await redisClient.sCard(onlineUserKey(userId));
+    if (remaining === 0) {
+      await redisClient.sRem(onlineUsersKey, userId);
+    }
+
+    return { userId, isOffline: remaining === 0 };
+  };
+
   const getOtherUserId = async (roomId, userId) => {
     const users = await redisClient.sMembers(roomKey(roomId));
     return users.find((existing) => existing !== userId) || null;
@@ -150,12 +216,22 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
     return redisClient.sCard(roomKey(roomId));
   };
 
+  const isUserOnline = async (userId) => {
+    return redisClient.sIsMember(onlineUsersKey, userId);
+  };
+
+  const listOnlineUserIds = async () => redisClient.sMembers(onlineUsersKey);
+
   return {
     canJoin,
     register,
     unregister,
     getOtherUserId,
-    getUniqueUserCount
+    getUniqueUserCount,
+    registerOnline,
+    unregisterOnline,
+    isUserOnline,
+    listOnlineUserIds
   };
 }
 
