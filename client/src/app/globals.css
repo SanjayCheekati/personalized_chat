@@ -19,6 +19,8 @@
   --bubble-border: #2a3942;
   --tick-seen: #53bdeb;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  --games-haze: rgba(0, 168, 132, 0.16);
+  --games-glow: rgba(239, 75, 95, 0.16);
 }
 
 body[data-theme="light"] {
@@ -36,6 +38,8 @@ body[data-theme="light"] {
   --bubble-border: #e4e6eb;
   --tick-seen: #0f7bdc;
   --shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  --games-haze: rgba(11, 132, 108, 0.12);
+  --games-glow: rgba(213, 72, 85, 0.12);
 }
 
 * {
@@ -71,6 +75,20 @@ body {
   max-height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+.games-shell {
+  background:
+    radial-gradient(circle at 18% 0%, var(--games-haze), transparent 45%),
+    radial-gradient(circle at 82% 14%, var(--games-glow), transparent 40%),
+    linear-gradient(180deg, rgba(8, 12, 16, 0.92), rgba(11, 20, 26, 0.92));
+}
+
+body[data-theme="light"] .games-shell {
+  background:
+    radial-gradient(circle at 18% 0%, var(--games-haze), transparent 45%),
+    radial-gradient(circle at 82% 14%, var(--games-glow), transparent 40%),
+    linear-gradient(180deg, rgba(245, 246, 248, 0.96), rgba(255, 255, 255, 0.96));
 }
 
 @keyframes fadeIn {
@@ -122,6 +140,21 @@ body {
   background-size: 120px 120px;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+  .chat-scroll {
+    overflow-x: hidden;
+  }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-shell {
