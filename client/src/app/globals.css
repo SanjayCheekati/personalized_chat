@@ -65,6 +65,11 @@ body {
   overflow-y: auto;
 }
 
+.page-shell.chat-fixed {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

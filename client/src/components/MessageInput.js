@@ -13,7 +13,8 @@ export default function MessageInput({
   editingMessage,
   onCancelEdit,
   typingPreview,
-  theme = "dark"
+  theme = "dark",
+  keepFocus = false
 }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const pickerRef = useRef(null);
@@ -48,6 +49,15 @@ export default function MessageInput({
     onValueChange?.("");
     onTyping?.(false);
     setShowEmoji(false);
+    requestAnimationFrame(() => {
+      focusInput();
+    });
+  };
+
+  const handleBlur = () => {
+    if (!keepFocus || disabled) {
+      return;
+    }
     requestAnimationFrame(() => {
       focusInput();
     });
@@ -179,6 +189,7 @@ export default function MessageInput({
 
           <textarea
             ref={textareaRef}
+            autoFocus={keepFocus}
             value={value}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
@@ -186,6 +197,7 @@ export default function MessageInput({
             onKeyUp={trackSelection}
             onSelect={trackSelection}
             onFocus={trackSelection}
+            onBlur={handleBlur}
             rows={1}
             placeholder={disabled ? "Connecting..." : "Type a message"}
             className="min-h-[44px] w-full resize-none rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] py-2 pl-10 pr-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"

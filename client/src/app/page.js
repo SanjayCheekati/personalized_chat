@@ -679,7 +679,7 @@ export default function Home() {
     : "offline";
 
   return (
-    <div className="page-shell">
+    <div className="page-shell chat-fixed">
       <ChatShell
         header={
           <div className="flex w-full flex-nowrap items-center justify-between gap-2">
@@ -764,6 +764,7 @@ export default function Home() {
             }}
             typingPreview={typingPreview}
             theme={theme}
+            keepFocus
           />
         }
       >

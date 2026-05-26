@@ -372,8 +372,8 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const showBack = adminPanelOpen || Boolean(activeConversationId);
 
   return (
-    <div className="page-shell admin-shell">
-      <div className="flex min-h-screen w-full flex-col">
+    <div className="page-shell admin-shell chat-fixed">
+      <div className="flex min-h-screen h-[100dvh] w-full flex-col">
         <header className="sticky top-0 z-30 border-b border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -423,7 +423,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
           </div>
         </header>
 
-        <main className="flex-1">
+        <main className="flex-1 overflow-y-auto">
           {adminPanelOpen ? (
             <section className="admin-panel px-4 py-6">
               <div className="mb-4 flex items-center justify-between">
@@ -529,6 +529,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                   onTyping={handleTyping}
                   typingPreview={""}
                   theme={theme}
+                  keepFocus
                 />
               </div>
             </section>
