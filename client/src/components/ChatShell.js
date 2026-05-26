@@ -1,6 +1,6 @@
 export default function ChatShell({ header, children, footer }) {
   return (
-    <div className="chat-shell grid h-[100dvh] min-h-[100dvh] w-full flex-1 grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden">
+    <div className="chat-shell grid h-[100dvh] min-h-[100dvh] w-full flex-1 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
       <header className="border-b border-[var(--panel-border)] bg-[var(--panel)] px-3 py-3 sm:px-4">
         {header}
       </header>
