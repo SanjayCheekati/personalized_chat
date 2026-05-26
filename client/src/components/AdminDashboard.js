@@ -21,6 +21,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
+  const [replyTarget, setReplyTarget] = useState(null);
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
@@ -36,6 +37,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     () => conversations.find((item) => item.id === activeConversationId) || null,
     [conversations, activeConversationId]
   );
+  const activeUser = activeConversation?.user || null;
 
   useEffect(() => {
     activeConversationRef.current = activeConversationId;
@@ -187,6 +189,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     if (!activeConversationId || !auth.token) {
       setMessages([]);
       setDraft("");
+      setReplyTarget(null);
       return;
     }
 
@@ -247,6 +250,13 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     }
 
     const clientId = makeClientId();
+    const replyTo = replyTarget
+      ? {
+          id: replyTarget.id,
+          text: replyTarget.text,
+          senderId: replyTarget.senderId
+        }
+      : null;
     const optimistic = {
       id: null,
       clientId,
@@ -254,7 +264,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       senderId: auth.user.id,
       receiverId: activeConversation?.user?.id || null,
       text: trimmed,
-      replyTo: null,
+      replyTo,
       timestamp: new Date().toISOString(),
       seen: false,
       deleted: false,
@@ -264,13 +274,14 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
 
     setMessages((prev) => [...prev, optimistic]);
 
-    socketRef.current.emit("send_message", { text: trimmed, clientId }, (ack) => {
+    socketRef.current.emit("send_message", { text: trimmed, clientId, replyTo }, (ack) => {
       if (!ack?.message) {
         return;
       }
       setMessages((prev) => upsertMessage(prev, ack.message, auth.user.id));
     });
 
+    setReplyTarget(null);
     setDraft("");
   };
 
@@ -329,6 +340,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
 
   const handleOpenAdminPanel = () => {
     setAdminPanelOpen(true);
+    setReplyTarget(null);
   };
 
   const handleOpenGames = () => {
@@ -376,6 +388,22 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   }, [users, userQuery]);
 
   const showBack = adminPanelOpen || Boolean(activeConversationId);
+  const headerTitle = adminPanelOpen
+    ? "Users"
+    : activeConversationId
+    ? activeUser?.name || activeUser?.username || "Chat"
+    : "Chats";
+  const headerStatus = adminPanelOpen
+    ? `${users.length} users`
+    : activeConversationId
+    ? typingByConversation[activeConversationId]
+      ? "typing..."
+      : activeConversation?.online
+      ? "online"
+      : activeUser?.lastSeenAt
+      ? `last seen ${formatLastSeen(activeUser.lastSeenAt)}`
+      : "offline"
+    : `${conversations.length} conversations`;
 
   return (
     <div className="page-shell admin-shell chat-fixed">
@@ -393,9 +421,11 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                   <BackIcon />
                 </button>
               ) : null}
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[var(--accent)]">Admin</p>
-                <p className="text-sm font-semibold text-[var(--ink)]">Arjun</p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                  {headerTitle}
+                </p>
+                <p className="truncate text-xs text-[var(--ink-soft)]">{headerStatus}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -406,14 +436,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                 aria-label="Games"
               >
                 <GamesIcon />
-              </button>
-              <button
-                type="button"
-                onClick={onToggleTheme}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)]"
-                aria-label="Toggle theme"
-              >
-                {theme === "light" ? <MoonIcon /> : <SunIcon />}
               </button>
               <button
                 type="button"
@@ -437,9 +459,9 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {adminPanelOpen ? (
-            <section className="admin-panel px-4 py-6">
+            <section className="admin-panel flex-1 overflow-y-auto px-4 py-6">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-[var(--ink-soft)]">
@@ -513,21 +535,18 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
               </div>
             </section>
           ) : activeConversationId ? (
-            <section className="flex min-h-[calc(100vh-120px)] flex-col">
-              <div className="border-b border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
-                <p className="text-sm font-semibold text-[var(--ink)]">
-                  {activeConversation?.user?.name || "Chat"}
-                </p>
-                <p className="text-xs text-[var(--ink-soft)]">
-                  {activeConversation?.online
-                    ? "online"
-                    : activeConversation?.user?.lastSeenAt
-                    ? `last seen ${formatLastSeen(activeConversation.user.lastSeenAt)}`
-                    : "offline"}
-                </p>
-              </div>
+            <section className="flex min-h-0 flex-1 flex-col">
               <div className="chat-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-                <MessageList messages={messages} currentUserId={auth.user.id} />
+                <MessageList
+                  messages={messages}
+                  currentUserId={auth.user.id}
+                  onReply={(message) => {
+                    if (message.deleted) {
+                      return;
+                    }
+                    setReplyTarget(message);
+                  }}
+                />
                 {typingPreview ? (
                   <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
                     {typingPreview}
@@ -541,6 +560,8 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                   onValueChange={setDraft}
                   onSend={handleSend}
                   onTyping={handleTyping}
+                  replyTarget={replyTarget}
+                  onCancelReply={() => setReplyTarget(null)}
                   typingPreview={""}
                   theme={theme}
                   keepFocus
@@ -548,7 +569,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
               </div>
             </section>
           ) : (
-            <section className="px-4 py-5">
+            <section className="flex-1 overflow-y-auto px-4 py-5">
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm font-semibold text-[var(--ink)]">Chats</p>
               </div>
