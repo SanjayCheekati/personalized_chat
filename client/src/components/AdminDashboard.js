@@ -407,7 +407,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
 
   return (
     <div className="page-shell admin-shell chat-fixed">
-      <div className="flex min-h-screen h-[100dvh] w-full flex-col">
+      <div className="flex h-[100dvh] min-h-[100dvh] w-full flex-col">
         <header className="sticky top-0 z-30 border-b border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">

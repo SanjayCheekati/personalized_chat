@@ -67,7 +67,10 @@ body {
 
 .page-shell.chat-fixed {
   height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 @keyframes fadeIn {
@@ -117,6 +120,8 @@ body {
     radial-gradient(circle at 24px 24px, rgba(255, 255, 255, 0.03) 2px, transparent 0),
     radial-gradient(circle at 72px 72px, rgba(255, 255, 255, 0.02) 2px, transparent 0);
   background-size: 120px 120px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-shell {
