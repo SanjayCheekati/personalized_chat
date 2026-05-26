@@ -138,14 +138,10 @@ body[data-theme="light"] .games-shell {
     radial-gradient(circle at 24px 24px, rgba(255, 255, 255, 0.03) 2px, transparent 0),
     radial-gradient(circle at 72px 72px, rgba(255, 255, 255, 0.02) 2px, transparent 0);
   background-size: 120px 120px;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 640px) {
-  .chat-scroll {
-    overflow-x: hidden;
-  }
 }
 
 .no-scrollbar {
