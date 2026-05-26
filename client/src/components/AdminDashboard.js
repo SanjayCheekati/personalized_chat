@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
 import { createSocket } from "../socket/client";
@@ -15,6 +16,7 @@ import {
 const DEFAULT_STATUS = { connecting: false, connected: false, error: "" };
 
 export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout }) {
+  const router = useRouter();
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -329,6 +331,10 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     setAdminPanelOpen(true);
   };
 
+  const handleOpenGames = () => {
+    router.push("/games");
+  };
+
   const handleBack = () => {
     if (adminPanelOpen) {
       setAdminPanelOpen(false);
@@ -393,6 +399,14 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenGames}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)]"
+                aria-label="Games"
+              >
+                <GamesIcon />
+              </button>
               <button
                 type="button"
                 onClick={onToggleTheme}
@@ -741,6 +755,14 @@ function DotsIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
       <path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0-.001-3.999A2 2 0 0 0 12 14zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+    </svg>
+  );
+}
+
+function GamesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M7.5 7.5h9A3.5 3.5 0 0 1 20 11v2.5A3.5 3.5 0 0 1 16.5 17h-9A3.5 3.5 0 0 1 4 13.5V11a3.5 3.5 0 0 1 3.5-3.5zm2 2a.75.75 0 1 0 0 1.5h1.5a.75.75 0 1 0 0-1.5H9.5zm-2 2.5a.75.75 0 1 0 0 1.5H9a.75.75 0 1 0 0-1.5H7.5zm9-1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-1.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z" />
     </svg>
   );
 }
