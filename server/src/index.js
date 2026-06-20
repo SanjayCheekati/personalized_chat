@@ -14,6 +14,7 @@ const { createRateLimiter } = require("./middleware/rateLimit");
 const { authRouter } = require("./routes/auth");
 const { chatRouter } = require("./routes/chat");
 const { adminRouter } = require("./routes/admin");
+const { pushRouter } = require("./routes/push");
 const { initSocket } = require("./sockets");
 const { initUserStore } = require("./models/userStore");
 const { createMessageStore } = require("./models/messageStore");
@@ -84,6 +85,7 @@ async function start() {
       messageStore
     })
   );
+  app.use(pushRouter(env, require("./models/userStore").userStore));
 
   initSocket(server, {
     env,

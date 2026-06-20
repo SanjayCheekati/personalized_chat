@@ -1,5 +1,6 @@
 const { Server } = require("socket.io");
 const { verifySocketToken } = require("../middleware/auth");
+const { sendPushNotification } = require("../services/push");
 
 const ADMIN_ROOM = "admin";
 
@@ -184,6 +185,17 @@ function initSocket(
 
         io.to(activeRoomId).emit("receive_message", message);
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
+
+        if (receiverId) {
+          const receiverActive = await presenceStore.isUserInRoom(activeRoomId, receiverId);
+          if (!receiverActive) {
+            sendPushNotification(receiverId, {
+              title: user.name || user.username || "FlashChat",
+              body: text,
+              roomId: activeRoomId
+            }).catch((err) => console.error("Error sending push notification:", err));
+          }
+        }
 
         if (typeof ack === "function") {
           ack({ ok: true, message });
@@ -399,6 +411,17 @@ function initSocket(
 
         io.to(activeRoomId).emit("receive_message", message);
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
+
+        if (receiverId) {
+          const receiverActive = await presenceStore.isUserInRoom(activeRoomId, receiverId);
+          if (!receiverActive) {
+            sendPushNotification(receiverId, {
+              title: senderName,
+              body: "sent you a nudge!",
+              roomId: activeRoomId
+            }).catch((err) => console.error("Error sending push notification:", err));
+          }
+        }
 
         if (typeof ack === "function") {
           ack({ ok: true, message });

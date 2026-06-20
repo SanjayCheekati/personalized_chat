@@ -59,7 +59,8 @@ function normalizeUser(user) {
     lastSeenAt: user.lastSeenAt
       ? user.lastSeenAt.toISOString?.() || user.lastSeenAt
       : null,
-    isGuest: Boolean(user.isGuest)
+    isGuest: Boolean(user.isGuest),
+    pushSubscriptions: user.pushSubscriptions || []
   };
 }
 
@@ -438,6 +439,61 @@ async function verifyPassword(user, password) {
   return false;
 }
 
+async function addPushSubscription(userId, subscription) {
+  if (!userId || !subscription) {
+    return null;
+  }
+
+  if (usersCollection) {
+    const result = await usersCollection.findOneAndUpdate(
+      { id: userId },
+      { $addToSet: { pushSubscriptions: subscription } },
+      { returnDocument: "after" }
+    );
+    return result ? normalizeUser(result) : null;
+  }
+
+  const existing = state.usersById.get(userId);
+  if (!existing) {
+    return null;
+  }
+
+  const pushSubscriptions = existing.pushSubscriptions || [];
+  const alreadySubscribed = pushSubscriptions.some((sub) => sub.endpoint === subscription.endpoint);
+  if (!alreadySubscribed) {
+    pushSubscriptions.push(subscription);
+  }
+  const next = { ...existing, pushSubscriptions };
+  addUser(next);
+  return normalizeUser(next);
+}
+
+async function removePushSubscription(userId, endpoint) {
+  if (!userId || !endpoint) {
+    return null;
+  }
+
+  if (usersCollection) {
+    const result = await usersCollection.findOneAndUpdate(
+      { id: userId },
+      { $pull: { pushSubscriptions: { endpoint: endpoint } } },
+      { returnDocument: "after" }
+    );
+    return result ? normalizeUser(result) : null;
+  }
+
+  const existing = state.usersById.get(userId);
+  if (!existing) {
+    return null;
+  }
+
+  let pushSubscriptions = existing.pushSubscriptions || [];
+  pushSubscriptions = pushSubscriptions.filter((sub) => sub.endpoint !== endpoint);
+  const next = { ...existing, pushSubscriptions };
+  addUser(next);
+  return normalizeUser(next);
+}
+
 const userStore = {
   createGuest,
   findByEmail,
@@ -451,7 +507,9 @@ const userStore = {
   deleteUser,
   touchLogin,
   touchLastSeen,
-  verifyPassword
+  verifyPassword,
+  addPushSubscription,
+  removePushSubscription
 };
 
 module.exports = { initUserStore, userStore };

@@ -14,6 +14,12 @@ import {
   requestPasswordReset,
   signUp
 } from "../services/api";
+import {
+  checkSubscriptionState,
+  subscribeUser,
+  unsubscribeUser,
+  registerServiceWorker
+} from "../utils/pushSubscription";
 
 const AUTH_KEY = "flashchat.auth";
 const DEFAULT_PEER = {
@@ -57,6 +63,7 @@ export default function Home() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const isAdmin = auth?.user?.role === "admin";
@@ -73,6 +80,17 @@ export default function Home() {
       localStorage.removeItem(AUTH_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    if (!auth || isAdmin) {
+      return;
+    }
+    registerServiceWorker().catch((err) => console.error("SW registration error:", err));
+
+    checkSubscriptionState().then((subscribed) => {
+      setNotificationsEnabled(subscribed);
+    });
+  }, [auth, isAdmin]);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("flashchat.theme") || "dark";
@@ -363,6 +381,9 @@ export default function Home() {
   };
 
   const handleLogout = () => {
+    if (auth && notificationsEnabled) {
+      unsubscribeUser(auth.token).catch(() => {});
+    }
     localStorage.removeItem(AUTH_KEY);
     setAuth(null);
     setMessages([]);
@@ -371,6 +392,25 @@ export default function Home() {
     setReplyTarget(null);
     setEditingMessage(null);
     setStatus({ connecting: false, connected: false, error: "" });
+    setNotificationsEnabled(false);
+  };
+
+  const handleToggleNotifications = async () => {
+    if (!auth) {
+      return;
+    }
+    try {
+      if (notificationsEnabled) {
+        await unsubscribeUser(auth.token);
+        setNotificationsEnabled(false);
+      } else {
+        await subscribeUser(auth.token);
+        setNotificationsEnabled(true);
+      }
+    } catch (error) {
+      console.error("Failed to toggle notifications:", error);
+      alert(error.message || "Failed to toggle notifications.");
+    }
   };
 
   const handleForgotPassword = async (event) => {
@@ -799,10 +839,17 @@ export default function Home() {
                   </svg>
                 </button>
                 {menuOpen ? (
-                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-xs text-[var(--ink)] shadow-glow">
-                    <div className="px-3 py-2 text-[var(--ink-soft)]">
-                      More features coming soon
-                    </div>
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-xs text-[var(--ink)] shadow-glow z-50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        handleToggleNotifications();
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--panel)] transition font-semibold"
+                    >
+                      {notificationsEnabled ? "Disable Notifications" : "Enable Notifications"}
+                    </button>
                   </div>
                 ) : null}
               </div>
