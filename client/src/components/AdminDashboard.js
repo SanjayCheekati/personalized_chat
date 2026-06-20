@@ -25,6 +25,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [firstUnreadId, setFirstUnreadId] = useState(null);
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -34,6 +35,17 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const activeConversationRef = useRef(null);
+
+  const totalUnreadCount = useMemo(() => {
+    return conversations.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
+  }, [conversations]);
+
+  useEffect(() => {
+    document.title = totalUnreadCount > 0 ? `(${totalUnreadCount}) FlashChat` : "FlashChat";
+    return () => {
+      document.title = "FlashChat";
+    };
+  }, [totalUnreadCount]);
 
   const activeConversation = useMemo(
     () => conversations.find((item) => item.id === activeConversationId) || null,
@@ -193,6 +205,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       setDraft("");
       setReplyTarget(null);
       setHasMore(false);
+      setFirstUnreadId(null);
       return;
     }
 
@@ -213,6 +226,11 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
           const fetched = data.messages || [];
           setMessages(normalizeMessages(fetched, auth.user.id));
           setHasMore(fetched.length >= 50);
+
+          const firstUnseen = fetched.find(
+            (m) => m.senderId !== auth.user.id && !m.seen
+          );
+          setFirstUnreadId(firstUnseen ? firstUnseen.id : null);
         }
       })
       .catch(() => {});
@@ -286,6 +304,8 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     if (!trimmed) {
       return;
     }
+
+    setFirstUnreadId(null);
 
     const clientId = makeClientId();
     const replyTo = replyTarget
@@ -430,6 +450,8 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     ? "Users"
     : activeConversationId
     ? activeUser?.name || activeUser?.username || "Chat"
+    : totalUnreadCount > 0
+    ? `Chats (${totalUnreadCount} new)`
     : "Chats";
   const headerStatus = adminPanelOpen
     ? `${users.length} users`
@@ -587,6 +609,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                   hasMore={hasMore}
                   loadingMore={loadingMore}
                   onLoadMore={handleLoadMore}
+                  firstUnreadId={firstUnreadId}
                 />
                 {typingPreview ? (
                   <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">

@@ -56,6 +56,7 @@ export default function Home() {
   });
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [firstUnreadId, setFirstUnreadId] = useState(null);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const isAdmin = auth?.user?.role === "admin";
@@ -119,6 +120,11 @@ export default function Home() {
           const nextMessages = normalizeMessages(fetched, auth.user.id);
           setMessages(nextMessages);
           setHasMore(fetched.length >= 50);
+
+          const firstUnseen = fetched.find(
+            (m) => m.senderId !== auth.user.id && !m.seen
+          );
+          setFirstUnreadId(firstUnseen ? firstUnseen.id : null);
         }
       })
       .catch((error) => {
@@ -293,6 +299,18 @@ export default function Home() {
     setMessages((prev) => markMessagesSeen(prev, unseen, seenAt));
   }, [messages, auth]);
 
+  useEffect(() => {
+    if (auth && !isAdmin) {
+      const unread = messages.filter((m) => m.senderId !== auth.user.id && !m.seen).length;
+      document.title = unread > 0 ? `(${unread}) FlashChat` : "FlashChat";
+    } else {
+      document.title = "FlashChat";
+    }
+    return () => {
+      document.title = "FlashChat";
+    };
+  }, [messages, auth, isAdmin]);
+
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -381,6 +399,8 @@ export default function Home() {
     if (!trimmed) {
       return;
     }
+
+    setFirstUnreadId(null);
 
     if (editingMessage?.id) {
       const editedAt = new Date().toISOString();
@@ -829,6 +849,7 @@ export default function Home() {
           hasMore={hasMore}
           loadingMore={loadingMore}
           onLoadMore={handleLoadMore}
+          firstUnreadId={firstUnreadId}
         />
         {seenAtMessage ? (
           <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">

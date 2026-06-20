@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, Fragment } from "react";
 import { groupMessagesByDate, formatDateSeparator } from "../utils/date";
 
 function formatTime(value) {
@@ -18,6 +18,7 @@ export default function MessageList({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  firstUnreadId = null,
 }) {
   const endRef = useRef(null);
   const listRef = useRef(null);
@@ -120,11 +121,22 @@ export default function MessageList({
           );
         }
 
+        const showNewMessagesLine = message.id === firstUnreadId;
+
         return (
-          <div
-            key={message.id || message.clientId || Math.random()}
-            className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
-          >
+          <Fragment key={message.id || message.clientId || Math.random()}>
+            {showNewMessagesLine ? (
+              <div className="flex items-center gap-3 my-3 shrink-0 animate-fade-in">
+                <div className="flex-1 h-[1px] bg-[var(--accent-warm)] opacity-30" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-warm)] bg-[var(--panel-dark)] px-3 py-1 rounded-full border border-[var(--panel-border)] shrink-0 shadow-sm">
+                  New Messages
+                </span>
+                <div className="flex-1 h-[1px] bg-[var(--accent-warm)] opacity-30" />
+              </div>
+            ) : null}
+            <div
+              className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
+            >
             <div
               className={`relative max-w-[80%] rounded-2xl border px-3 py-2 text-sm sm:max-w-[70%] ${
                 isMine
@@ -193,7 +205,8 @@ export default function MessageList({
               ) : null}
             </div>
           </div>
-        );
+        </Fragment>
+      );
       })}
       <div ref={endRef} />
     </div>
