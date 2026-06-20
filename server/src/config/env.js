@@ -27,6 +27,13 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
   }
 }
 
+const cleanEnvVar = (val) => {
+  if (!val) {
+    return "";
+  }
+  return val.trim().replace(/^['"]|['"]$/g, "").trim();
+};
+
 const env = {
   NODE_ENV: process.env.NODE_ENV || "development",
   PORT: Number(process.env.PORT || 4000),
@@ -43,9 +50,9 @@ const env = {
   REDIS_PREFIX: process.env.REDIS_PREFIX || "flashchat",
   RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS || "",
   RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX || "",
-  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || "",
-  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || "",
-  VAPID_EMAIL: process.env.VAPID_EMAIL || "mailto:admin@flashchat.com"
+  VAPID_PUBLIC_KEY: cleanEnvVar(process.env.VAPID_PUBLIC_KEY || ""),
+  VAPID_PRIVATE_KEY: cleanEnvVar(process.env.VAPID_PRIVATE_KEY || ""),
+  VAPID_EMAIL: cleanEnvVar(process.env.VAPID_EMAIL || "mailto:admin@flashchat.com")
 };
 
 module.exports = env;
