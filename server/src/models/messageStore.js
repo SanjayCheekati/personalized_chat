@@ -170,7 +170,7 @@ function createMessageStore({ db, cache } = {}) {
         { returnDocument: "after" }
       );
 
-      const mapped = result.value ? mapDoc(result.value) : null;
+      const mapped = result ? mapDoc(result) : null;
       if (mapped && cache) {
         const cached = await cache.getJSON(`messages:${roomId}`);
         if (Array.isArray(cached)) {

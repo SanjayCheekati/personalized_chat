@@ -272,7 +272,7 @@ async function updateUser(userId, updates = {}) {
       { $set: { ...allowed, updatedAt: new Date() } },
       { returnDocument: "after" }
     );
-    return result.value ? normalizeUser(result.value) : null;
+    return result ? normalizeUser(result) : null;
   }
 
   const existing = state.usersById.get(userId);
@@ -299,7 +299,7 @@ async function setPassword(userId, password) {
       { $set: updates },
       { returnDocument: "after" }
     );
-    return result.value ? normalizeUser(result.value) : null;
+    return result ? normalizeUser(result) : null;
   }
 
   const existing = state.usersById.get(userId);
@@ -361,7 +361,7 @@ async function deleteUser(userId) {
       { $set: { status: "deleted", updatedAt: new Date() } },
       { returnDocument: "after" }
     );
-    return result.value ? normalizeUser(result.value) : null;
+    return result ? normalizeUser(result) : null;
   }
 
   const existing = state.usersById.get(userId);

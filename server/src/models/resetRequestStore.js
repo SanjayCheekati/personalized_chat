@@ -106,7 +106,7 @@ function createResetRequestStore({ db } = {}) {
         { $set: nextUpdates },
         { returnDocument: "after" }
       );
-      return result.value ? mapDoc(result.value) : null;
+      return result ? mapDoc(result) : null;
     }
 
     const existing = requests.get(requestId);
