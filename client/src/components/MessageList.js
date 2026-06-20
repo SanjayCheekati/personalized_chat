@@ -62,7 +62,8 @@ export default function MessageList({
   }, [messages]);
 
   return (
-    <div ref={listRef} className="flex min-h-full flex-col justify-end gap-3">
+    <div ref={listRef} className="flex min-h-full flex-col gap-3">
+      <div className="mt-auto" />
       {hasMore ? (
         <div className="flex justify-center my-2 shrink-0">
           <button
