@@ -55,4 +55,9 @@ const env = {
   VAPID_EMAIL: cleanEnvVar(process.env.VAPID_EMAIL || "mailto:admin@flashchat.com")
 };
 
+console.log("Push VAPID configuration initialized:");
+console.log("- Public Key length:", env.VAPID_PUBLIC_KEY ? env.VAPID_PUBLIC_KEY.length : 0);
+console.log("- Private Key length:", env.VAPID_PRIVATE_KEY ? env.VAPID_PRIVATE_KEY.length : 0);
+console.log("- Email:", env.VAPID_EMAIL);
+
 module.exports = env;
