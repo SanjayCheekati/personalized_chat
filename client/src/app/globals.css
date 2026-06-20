@@ -67,6 +67,7 @@ body {
 
 .page-shell.chat-fixed {
   height: 100dvh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -111,7 +112,7 @@ body {
   background: var(--panel-dark);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
