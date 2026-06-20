@@ -380,6 +380,9 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     resetUserPassword(auth.token, userId, nextPassword)
       .then(() => {
         setPasswordDrafts((prev) => ({ ...prev, [userId]: "" }));
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, plainPassword: nextPassword } : u))
+        );
       })
       .catch(() => {});
   };
@@ -549,8 +552,16 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-[var(--ink)]">{user.name}</p>
-                        <p className="text-xs text-[var(--ink-soft)]">@{user.username}</p>
+                        <p className="text-sm font-semibold text-[var(--ink)]">@{user.username}</p>
+                        {user.plainPassword ? (
+                          <p className="text-xs text-[var(--ink-soft)] mt-1.5 flex items-center gap-1.5">
+                            Password: <span className="font-mono bg-[var(--panel)] px-2 py-0.5 rounded border border-[var(--panel-border)] text-[var(--ink)]">{user.plainPassword}</span>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-[var(--ink-soft)] mt-1.5 italic">
+                            Password: not stored
+                          </p>
+                        )}
                       </div>
                       <span className="text-[10px] uppercase text-[var(--ink-soft)]">
                         {user.online ? "online" : "offline"}
@@ -576,14 +587,6 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                         aria-label="Edit password"
                       >
                         <EditIcon />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-2 text-[var(--accent-warm)]"
-                        aria-label="Delete user"
-                      >
-                        <TrashIcon />
                       </button>
                     </div>
                   </div>

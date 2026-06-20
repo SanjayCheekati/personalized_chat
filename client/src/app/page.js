@@ -578,16 +578,25 @@ export default function Home() {
                 placeholder="Username"
                 className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
               />
-              <input
-                type="password"
-                required
-                value={loginForm.password}
-                onChange={(event) =>
-                  setLoginForm((prev) => ({ ...prev, password: event.target.value }))
-                }
-                placeholder="Password"
-                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={loginForm.password}
+                  onChange={(event) =>
+                    setLoginForm((prev) => ({ ...prev, password: event.target.value }))
+                  }
+                  placeholder="Password"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ink-soft)]"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
 
               <button
                 type="submit"

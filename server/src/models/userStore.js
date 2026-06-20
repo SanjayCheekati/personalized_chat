@@ -50,6 +50,7 @@ function normalizeUser(user) {
       : [],
     role: user.role || (user.isAdmin ? "admin" : DEFAULT_ROLE),
     status: user.status || DEFAULT_STATUS,
+    plainPassword: user.plainPassword || "",
     createdAt: user.createdAt ? user.createdAt.toISOString?.() || user.createdAt : null,
     updatedAt: user.updatedAt ? user.updatedAt.toISOString?.() || user.updatedAt : null,
     lastLoginAt: user.lastLoginAt
@@ -102,6 +103,7 @@ async function initUserStore(env, db) {
           email,
           passwordHash,
           passwordHashes,
+          plainPassword: seed.password || (passwords && passwords[0]) || "",
           role: seed.role || DEFAULT_ROLE,
           status: seed.status || DEFAULT_STATUS,
           isGuest: false,
@@ -149,6 +151,7 @@ async function ensureAdminUser(env) {
     email: existing?.email || "",
     passwordHash,
     passwordHashes: [passwordHash],
+    plainPassword: env.ADMIN_PASSWORD || "Arjun@8096",
     role: "admin",
     status: DEFAULT_STATUS,
     isGuest: false,
@@ -291,7 +294,7 @@ async function setPassword(userId, password) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const updates = { passwordHash, passwordHashes: [passwordHash], updatedAt: new Date() };
+  const updates = { passwordHash, passwordHashes: [passwordHash], plainPassword: password, updatedAt: new Date() };
 
   if (usersCollection) {
     const result = await usersCollection.findOneAndUpdate(
@@ -327,6 +330,7 @@ async function createUser({ username, password, name }) {
     email: "",
     passwordHash,
     passwordHashes: [passwordHash],
+    plainPassword: password,
     role: DEFAULT_ROLE,
     status: DEFAULT_STATUS,
     isGuest: false,
