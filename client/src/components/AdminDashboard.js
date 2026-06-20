@@ -23,6 +23,8 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState(null);
   const [status, setStatus] = useState(DEFAULT_STATUS);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -190,6 +192,7 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       setMessages([]);
       setDraft("");
       setReplyTarget(null);
+      setHasMore(false);
       return;
     }
 
@@ -202,11 +205,14 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
     );
 
     let ignore = false;
+    setHasMore(false);
 
     fetchMessages(auth.token, activeConversationId)
       .then((data) => {
         if (!ignore) {
-          setMessages(normalizeMessages(data.messages || [], auth.user.id));
+          const fetched = data.messages || [];
+          setMessages(normalizeMessages(fetched, auth.user.id));
+          setHasMore(fetched.length >= 50);
         }
       })
       .catch(() => {});
@@ -219,6 +225,38 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
       ignore = true;
     };
   }, [activeConversationId, auth.token, auth.user.id]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore || !auth.token || !activeConversationId) {
+      return;
+    }
+
+    setLoadingMore(true);
+    const oldestMessage = messages[0];
+    const before = oldestMessage ? oldestMessage.timestamp : null;
+
+    if (!before) {
+      setHasMore(false);
+      setLoadingMore(false);
+      return;
+    }
+
+    try {
+      const data = await fetchMessages(auth.token, activeConversationId, { before, limit: 50 });
+      const fetched = data.messages || [];
+      if (fetched.length === 0) {
+        setHasMore(false);
+      } else {
+        const normalized = normalizeMessages(fetched, auth.user.id);
+        setMessages((prev) => [...normalized, ...prev]);
+        setHasMore(fetched.length >= 50);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (!socketRef.current || !activeConversationId) {
@@ -546,6 +584,9 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
                     }
                     setReplyTarget(message);
                   }}
+                  hasMore={hasMore}
+                  loadingMore={loadingMore}
+                  onLoadMore={handleLoadMore}
                 />
                 {typingPreview ? (
                   <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">

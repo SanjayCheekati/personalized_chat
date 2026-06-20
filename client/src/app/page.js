@@ -54,6 +54,8 @@ export default function Home() {
     connected: false,
     error: ""
   });
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const isAdmin = auth?.user?.role === "admin";
@@ -108,12 +110,15 @@ export default function Home() {
     }
 
     let ignore = false;
+    setHasMore(false);
 
     fetchMessages(auth.token, auth.roomId)
       .then((data) => {
         if (!ignore) {
-          const nextMessages = normalizeMessages(data.messages || [], auth.user.id);
+          const fetched = data.messages || [];
+          const nextMessages = normalizeMessages(fetched, auth.user.id);
           setMessages(nextMessages);
+          setHasMore(fetched.length >= 50);
         }
       })
       .catch((error) => {
@@ -125,6 +130,38 @@ export default function Home() {
       ignore = true;
     };
   }, [auth]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore || !auth || !auth.roomId) {
+      return;
+    }
+
+    setLoadingMore(true);
+    const oldestMessage = messages[0];
+    const before = oldestMessage ? oldestMessage.timestamp : null;
+
+    if (!before) {
+      setHasMore(false);
+      setLoadingMore(false);
+      return;
+    }
+
+    try {
+      const data = await fetchMessages(auth.token, auth.roomId, { before, limit: 50 });
+      const fetched = data.messages || [];
+      if (fetched.length === 0) {
+        setHasMore(false);
+      } else {
+        const normalized = normalizeMessages(fetched, auth.user.id);
+        setMessages((prev) => [...normalized, ...prev]);
+        setHasMore(fetched.length >= 50);
+      }
+    } catch (error) {
+      console.error("Failed to load older messages:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (!auth || isAdmin) {
@@ -789,6 +826,9 @@ export default function Home() {
             setDraft(message.text || "");
             setReplyTarget(null);
           }}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={handleLoadMore}
         />
         {seenAtMessage ? (
           <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">

@@ -15,21 +15,81 @@ export default function MessageList({
   onDelete,
   onReply,
   onEdit,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }) {
   const endRef = useRef(null);
+  const listRef = useRef(null);
+  const prevMessagesLength = useRef(messages.length);
+  const prevScrollHeight = useRef(0);
+  const prevLastMessageIdRef = useRef(null);
 
   const groupedMessages = useMemo(() => groupMessagesByDate(messages), [messages]);
 
   useEffect(() => {
-    const marker = endRef.current;
-    if (!marker) {
+    const container = listRef.current?.parentElement;
+    if (!container) {
       return;
     }
-    marker.scrollIntoView({ behavior: "smooth" });
-  }, [groupedMessages]);
+
+    const lastMessage = messages[messages.length - 1];
+    const lastId = lastMessage ? (lastMessage.id || lastMessage.clientId) : null;
+
+    if (messages.length > prevMessagesLength.current) {
+      if (lastId === prevLastMessageIdRef.current) {
+        // Prepended older messages (history load)
+        const scrollDifference = container.scrollHeight - prevScrollHeight.current;
+        container.scrollTop = container.scrollTop + scrollDifference;
+      } else {
+        // Appended new messages (sent/received)
+        const marker = endRef.current;
+        if (marker) {
+          marker.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    } else if (messages.length > 0 && prevMessagesLength.current === 0) {
+      // Initial load
+      const marker = endRef.current;
+      if (marker) {
+        marker.scrollIntoView({ behavior: "auto" });
+      }
+    }
+
+    prevMessagesLength.current = messages.length;
+    prevScrollHeight.current = container.scrollHeight;
+    prevLastMessageIdRef.current = lastId;
+  }, [messages]);
 
   return (
-    <div className="flex min-h-full flex-col justify-end gap-3">
+    <div ref={listRef} className="flex min-h-full flex-col justify-end gap-3">
+      {hasMore ? (
+        <div className="flex justify-center my-2 shrink-0">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-1.5 text-xs font-semibold text-[var(--ink)] transition-all hover:bg-[var(--panel-dark)] hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {loadingMore ? (
+              <>
+                <svg className="animate-spin h-3 w-3 text-[var(--ink)]" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Loading history...</span>
+              </>
+            ) : (
+              <>
+                <svg className="h-3 w-3 text-[var(--ink-soft)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                <span>Load older messages</span>
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
       {groupedMessages.map((item) => {
         if (item.type === "date") {
           return (
