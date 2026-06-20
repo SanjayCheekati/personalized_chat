@@ -56,8 +56,7 @@ export default function Home() {
   });
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
-  const isAdmin =
-    auth?.user?.role === "admin" || auth?.user?.username?.toLowerCase() === "arjun";
+  const isAdmin = auth?.user?.role === "admin";
 
   useEffect(() => {
     const stored = localStorage.getItem(AUTH_KEY);
@@ -117,7 +116,10 @@ export default function Home() {
           setMessages(nextMessages);
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error("Failed to fetch messages:", error);
+        setStatus((prev) => ({ ...prev, error: "Failed to load messages." }));
+      });
 
     return () => {
       ignore = true;

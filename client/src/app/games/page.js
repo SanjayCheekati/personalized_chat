@@ -66,8 +66,7 @@ export default function GamesPage() {
   const [activeGameId, setActiveGameId] = useState(GAMES[0]?.id || null);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
-  const isAdmin =
-    auth?.user?.role === "admin" || auth?.user?.username?.toLowerCase() === "arjun";
+  const isAdmin = auth?.user?.role === "admin";
 
   useEffect(() => {
     const stored = localStorage.getItem(AUTH_KEY);

@@ -109,6 +109,10 @@ body {
 
 .chat-shell {
   background: var(--panel-dark);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .chat-scroll {
@@ -117,6 +121,8 @@ body {
     radial-gradient(circle at 24px 24px, rgba(255, 255, 255, 0.03) 2px, transparent 0),
     radial-gradient(circle at 72px 72px, rgba(255, 255, 255, 0.02) 2px, transparent 0);
   background-size: 120px 120px;
+  flex-grow: 1;
+  overflow-y: auto;
 }
 
 .admin-shell {
