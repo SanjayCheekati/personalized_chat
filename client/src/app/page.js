@@ -329,6 +329,19 @@ export default function Home() {
     };
   }, [messages, auth, isAdmin]);
 
+  const promptNotifications = (token) => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return;
+    }
+    setTimeout(async () => {
+      try {
+        await subscribeUser(token);
+        setNotificationsEnabled(true);
+      } catch (error) {
+        console.log("Auto-notifications prompt failed or was dismissed:", error);
+      }
+    }, 800);
+  };
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -347,6 +360,9 @@ export default function Home() {
       localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
+      if (data.user?.role !== "admin") {
+        promptNotifications(data.token);
+      }
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "login_failed" }));
     }
@@ -375,6 +391,9 @@ export default function Home() {
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
       setSignupForm({ username: "", password: "", confirmPassword: "" });
+      if (data.user?.role !== "admin") {
+        promptNotifications(data.token);
+      }
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "signup_failed" }));
     }
