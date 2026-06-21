@@ -828,13 +828,6 @@ export default function Home() {
                   <BellIcon enabled={notificationsEnabled} />
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:-translate-y-0.5"
-              >
-                Sign out
-              </button>
             </div>
           </div>
         }
