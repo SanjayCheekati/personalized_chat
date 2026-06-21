@@ -6,6 +6,7 @@ import ChatShell from "../components/ChatShell";
 import AdminDashboard from "../components/AdminDashboard";
 import MessageInput from "../components/MessageInput";
 import MessageList from "../components/MessageList";
+import RememberAnimation from "../components/RememberAnimation";
 import { createSocket } from "../socket/client";
 import {
   fetchConversation,
@@ -40,6 +41,9 @@ export default function Home() {
   const [editingMessage, setEditingMessage] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme] = useState("dark");
+  const [rememberAnimation, setRememberAnimation] = useState({ visible: false, senderName: "" });
+  const [rememberCooldown, setRememberCooldown] = useState(false);
+  const rememberCooldownRef = useRef(null);
   const [authMode, setAuthMode] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -249,6 +253,15 @@ export default function Home() {
 
     socket.on("receive_message", (message) => {
       setMessages((prev) => upsertMessage(prev, message, auth.user.id));
+      if (message.kind === "remember" && message.senderId !== auth.user.id) {
+        const senderName = message.text?.split(" Remembered")[0] || "Someone";
+        setRememberAnimation({ visible: true, senderName });
+      }
+    });
+
+    socket.on("message_reaction", (payload) => {
+      if (!payload?.messageId) return;
+      setMessages((prev) => applyReaction(prev, payload));
     });
 
     socket.on("message_seen", (payload) => {
@@ -581,7 +594,7 @@ export default function Home() {
   };
 
   const handleRemember = () => {
-    if (!socketRef.current || !auth?.roomId) {
+    if (!socketRef.current || !auth?.roomId || rememberCooldown) {
       return;
     }
 
@@ -592,6 +605,20 @@ export default function Home() {
         setStatus((prev) => ({ ...prev, error: "remember_failed" }));
       }
     });
+
+    setRememberCooldown(true);
+    rememberCooldownRef.current = setTimeout(() => {
+      setRememberCooldown(false);
+    }, 10000);
+  };
+
+  const handleReact = (messageId, emoji, action) => {
+    if (!socketRef.current || !messageId) return;
+    if (action === "remove") {
+      socketRef.current.emit("unreact_message", { messageId, emoji });
+    } else {
+      socketRef.current.emit("react_message", { messageId, emoji });
+    }
   };
 
   if (!auth) {
@@ -830,9 +857,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleRemember}
-                className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5"
+                disabled={rememberCooldown}
+                className={`rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5 ${rememberCooldown ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                Remember
+                {rememberCooldown ? "💕" : "Remember"}
               </button>
               {!notificationsEnabled ? (
                 <button
@@ -870,6 +898,7 @@ export default function Home() {
         <MessageList
           messages={messages}
           currentUserId={auth.user.id}
+          peerName={peer?.name || peer?.username || "Arjun"}
           onDelete={handleDelete}
           onReply={(message) => {
             if (message.deleted) {
@@ -886,6 +915,7 @@ export default function Home() {
             setDraft(message.text || "");
             setReplyTarget(null);
           }}
+          onReact={handleReact}
           hasMore={hasMore}
           loadingMore={loadingMore}
           onLoadMore={handleLoadMore}
@@ -897,6 +927,11 @@ export default function Home() {
           </p>
         ) : null}
       </ChatShell>
+      <RememberAnimation
+        visible={rememberAnimation.visible}
+        senderName={rememberAnimation.senderName}
+        onComplete={() => setRememberAnimation({ visible: false, senderName: "" })}
+      />
     </div>
   );
 }
@@ -974,6 +1009,26 @@ function markMessageEdited(list, messageId, text, editedAt) {
       ? { ...message, text, edited: true, editedAt, status: message.status }
       : message
   );
+}
+
+function applyReaction(list, { messageId, emoji, userId, action }) {
+  return list.map((message) => {
+    if (message.id !== messageId) return message;
+    const reactions = { ...(message.reactions || {}) };
+    const arr = reactions[emoji] ? [...reactions[emoji]] : [];
+    if (action === "add") {
+      if (!arr.includes(userId)) arr.push(userId);
+    } else {
+      const idx = arr.indexOf(userId);
+      if (idx !== -1) arr.splice(idx, 1);
+    }
+    if (arr.length > 0) {
+      reactions[emoji] = arr;
+    } else {
+      delete reactions[emoji];
+    }
+    return { ...message, reactions };
+  });
 }
 
 function findLatestSeenMessage(list, currentUserId) {

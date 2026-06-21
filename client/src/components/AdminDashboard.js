@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
+import RememberAnimation from "./RememberAnimation";
 import { createSocket } from "../socket/client";
 import {
   fetchAdminConversations,
@@ -41,6 +42,9 @@ export default function AdminDashboard({
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const activeConversationRef = useRef(null);
+  const [rememberAnimation, setRememberAnimation] = useState({ visible: false, senderName: "" });
+  const [rememberCooldown, setRememberCooldown] = useState(false);
+  const rememberCooldownRef = useRef(null);
 
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
@@ -101,6 +105,15 @@ export default function AdminDashboard({
 
     socket.on("receive_message", (message) => {
       setMessages((prev) => upsertMessage(prev, message, auth.user.id));
+      if (message.kind === "remember" && message.senderId !== auth.user.id) {
+        const senderName = message.text?.split(" Remembered")[0] || "Someone";
+        setRememberAnimation({ visible: true, senderName });
+      }
+    });
+
+    socket.on("message_reaction", (payload) => {
+      if (!payload?.messageId) return;
+      setMessages((prev) => applyReaction(prev, payload));
     });
 
     socket.on("message_seen", (payload) => {
@@ -413,7 +426,7 @@ export default function AdminDashboard({
 
 
   const handleRemember = () => {
-    if (!socketRef.current || !activeConversationId) {
+    if (!socketRef.current || !activeConversationId || rememberCooldown) {
       return;
     }
 
@@ -424,6 +437,20 @@ export default function AdminDashboard({
         setStatus((prev) => ({ ...prev, error: "remember_failed" }));
       }
     });
+
+    setRememberCooldown(true);
+    rememberCooldownRef.current = setTimeout(() => {
+      setRememberCooldown(false);
+    }, 10000);
+  };
+
+  const handleReact = (messageId, emoji, action) => {
+    if (!socketRef.current || !messageId) return;
+    if (action === "remove") {
+      socketRef.current.emit("unreact_message", { messageId, emoji });
+    } else {
+      socketRef.current.emit("react_message", { messageId, emoji });
+    }
   };
 
   const handleBack = () => {
@@ -514,9 +541,10 @@ export default function AdminDashboard({
                 <button
                   type="button"
                   onClick={handleRemember}
-                  className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5"
+                  disabled={rememberCooldown}
+                  className={`rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5 ${rememberCooldown ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
-                  Remember
+                  {rememberCooldown ? "💕" : "Remember"}
                 </button>
               ) : null}
               {!notificationsEnabled ? (
@@ -638,6 +666,7 @@ export default function AdminDashboard({
                     }
                     setReplyTarget(message);
                   }}
+                  onReact={handleReact}
                   hasMore={hasMore}
                   loadingMore={loadingMore}
                   onLoadMore={handleLoadMore}
@@ -728,6 +757,11 @@ export default function AdminDashboard({
           )}
         </main>
       </div>
+      <RememberAnimation
+        visible={rememberAnimation.visible}
+        senderName={rememberAnimation.senderName}
+        onComplete={() => setRememberAnimation({ visible: false, senderName: "" })}
+      />
     </div>
   );
 }
@@ -807,6 +841,25 @@ function markMessageDeleted(list, messageId, deletedBy) {
   );
 }
 
+function applyReaction(list, { messageId, emoji, userId, action }) {
+  return list.map((message) => {
+    if (message.id !== messageId) return message;
+    const reactions = { ...(message.reactions || {}) };
+    const arr = reactions[emoji] ? [...reactions[emoji]] : [];
+    if (action === "add") {
+      if (!arr.includes(userId)) arr.push(userId);
+    } else {
+      const idx = arr.indexOf(userId);
+      if (idx !== -1) arr.splice(idx, 1);
+    }
+    if (arr.length > 0) {
+      reactions[emoji] = arr;
+    } else {
+      delete reactions[emoji];
+    }
+    return { ...message, reactions };
+  });
+}
 function formatTime(value) {
   if (!value) {
     return "";

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, Fragment } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from "react";
 import { groupMessagesByDate, formatDateSeparator } from "../utils/date";
 
 function formatTime(value) {
@@ -60,12 +60,70 @@ function formatMessageText(text) {
   return parts.length > 0 ? parts : text;
 }
 
+const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🙏"];
+
+function ReactionBar({ onSelect }) {
+  return (
+    <div className="reaction-bar">
+      {QUICK_REACTIONS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(emoji);
+          }}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReactionBadges({ reactions, currentUserId, onToggle }) {
+  if (!reactions || typeof reactions !== "object") {
+    return null;
+  }
+
+  const entries = Object.entries(reactions).filter(
+    ([, users]) => Array.isArray(users) && users.length > 0
+  );
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="reaction-badges">
+      {entries.map(([emoji, users]) => {
+        const isMine = users.includes(currentUserId);
+        return (
+          <button
+            key={emoji}
+            type="button"
+            className={`reaction-badge${isMine ? " mine" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(emoji, isMine);
+            }}
+          >
+            <span>{emoji}</span>
+            {users.length > 1 ? <span className="count">{users.length}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function MessageList({
   messages = [],
   currentUserId,
   onDelete,
   onReply,
   onEdit,
+  onReact,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -76,6 +134,8 @@ export default function MessageList({
   const prevMessagesLength = useRef(messages.length);
   const prevScrollHeight = useRef(0);
   const prevLastMessageIdRef = useRef(null);
+  const [reactionOpenId, setReactionOpenId] = useState(null);
+  const longPressTimer = useRef(null);
 
   const groupedMessages = useMemo(() => groupMessagesByDate(messages), [messages]);
 
@@ -112,6 +172,40 @@ export default function MessageList({
     prevScrollHeight.current = container.scrollHeight;
     prevLastMessageIdRef.current = lastId;
   }, [messages]);
+
+  // Close reaction bar when clicking outside
+  useEffect(() => {
+    if (!reactionOpenId) return;
+    const handleClick = () => setReactionOpenId(null);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [reactionOpenId]);
+
+  const handleReactionSelect = useCallback((messageId, emoji) => {
+    setReactionOpenId(null);
+    if (onReact) {
+      onReact(messageId, emoji);
+    }
+  }, [onReact]);
+
+  const handleReactionToggle = useCallback((messageId, emoji, isMine) => {
+    if (onReact) {
+      onReact(messageId, emoji, isMine ? "remove" : "add");
+    }
+  }, [onReact]);
+
+  const handleTouchStart = useCallback((messageId) => {
+    longPressTimer.current = setTimeout(() => {
+      setReactionOpenId((prev) => (prev === messageId ? null : messageId));
+    }, 400);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
 
   return (
     <div ref={listRef} className="flex min-h-full flex-col gap-3">
@@ -162,17 +256,20 @@ export default function MessageList({
         const isRemember = message.kind === "remember";
 
         if (isRemember) {
+          const senderName = message.text?.split(" Remembered")[0] || "Someone";
+          const formattedTime = formatTime(message.timestamp);
           return (
             <div
               key={message.id || message.clientId || Math.random()}
               className="mx-auto rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-1 text-[11px] text-[var(--ink-soft)]"
             >
-              {message.text}
+              {senderName} Remembered you at {formattedTime}
             </div>
           );
         }
 
         const showNewMessagesLine = message.id === firstUnreadId;
+        const showReactionBar = reactionOpenId === (message.id || message.clientId);
 
         return (
           <Fragment key={message.id || message.clientId || Math.random()}>
@@ -187,14 +284,27 @@ export default function MessageList({
             ) : null}
             <div
               className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
+              onTouchStart={() => !isDeleted && message.id && handleTouchStart(message.id || message.clientId)}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
             >
-            <div
-              className={`relative max-w-[80%] rounded-2xl border px-3 py-2 text-sm sm:max-w-[70%] ${
-                isMine
-                  ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
-                  : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
-              }`}
-            >
+            <div className="relative max-w-[80%] sm:max-w-[70%]">
+              {/* Reaction bar */}
+              {showReactionBar && !isDeleted ? (
+                <div className={`absolute -top-12 ${isMine ? "right-0" : "left-0"} z-20`}>
+                  <ReactionBar
+                    onSelect={(emoji) => handleReactionSelect(message.id, emoji)}
+                  />
+                </div>
+              ) : null}
+
+              <div
+                className={`rounded-2xl border px-3 py-2 text-sm ${
+                  isMine
+                    ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
+                    : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
+                }`}
+              >
               {message.replyTo ? (
                 <div className="mb-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-1.5 text-xs text-[var(--ink-soft)]">
                   <p className="font-semibold text-[var(--ink)]">Reply</p>
@@ -220,8 +330,22 @@ export default function MessageList({
                 </p>
               )}
 
+              {/* Hover toolbar */}
               {!isDeleted ? (
                 <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">
+                  {onReact && message.id ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReactionOpenId((prev) => (prev === message.id ? null : message.id));
+                      }}
+                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                      aria-label="React"
+                    >
+                      <SmileIcon />
+                    </button>
+                  ) : null}
                   {onReply ? (
                     <button
                       type="button"
@@ -254,6 +378,18 @@ export default function MessageList({
                   ) : null}
                 </div>
               ) : null}
+              </div>
+
+              {/* Reaction badges */}
+              {!isDeleted && message.reactions ? (
+                <ReactionBadges
+                  reactions={message.reactions}
+                  currentUserId={currentUserId}
+                  onToggle={(emoji, isMine) =>
+                    handleReactionToggle(message.id, emoji, isMine)
+                  }
+                />
+              ) : null}
             </div>
           </div>
         </Fragment>
@@ -277,6 +413,14 @@ function StatusTicks({ status }) {
     status === "seen" ? "text-[var(--tick-seen)]" : "text-[var(--ink-soft)]";
 
   return <span className={className}>✓✓</span>;
+}
+
+function SmileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-6c.78 2.34 2.72 4 5 4s4.22-1.66 5-4H7zm1-2c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm8 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1z" />
+    </svg>
+  );
 }
 
 function ReplyIcon() {

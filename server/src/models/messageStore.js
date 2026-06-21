@@ -29,7 +29,8 @@ function createMessageStore({ db, cache } = {}) {
     deleted: Boolean(doc.deleted),
     deletedBy: doc.deletedBy || null,
     edited: Boolean(doc.edited),
-    editedAt: doc.editedAt ? doc.editedAt.toISOString?.() || doc.editedAt : null
+    editedAt: doc.editedAt ? doc.editedAt.toISOString?.() || doc.editedAt : null,
+    reactions: doc.reactions || {}
   });
 
   const list = async (roomId, options = {}) => {
@@ -99,7 +100,8 @@ function createMessageStore({ db, cache } = {}) {
       seenAt: null,
       edited: false,
       editedAt: null,
-      deleted: false
+      deleted: false,
+      reactions: {}
     };
 
     if (collection) {
@@ -258,12 +260,96 @@ function createMessageStore({ db, cache } = {}) {
     return total;
   };
 
+  const addReaction = async (roomId, messageId, userId, emoji) => {
+    if (!messageId || !userId || !emoji) {
+      return null;
+    }
+
+    if (collection) {
+      const key = `reactions.${emoji}`;
+      await collection.updateOne(
+        { roomId, id: messageId },
+        { $addToSet: { [key]: userId } }
+      );
+    } else {
+      const messages = getRoom(roomId);
+      const target = messages.find((m) => m.id === messageId);
+      if (target) {
+        if (!target.reactions) target.reactions = {};
+        if (!target.reactions[emoji]) target.reactions[emoji] = [];
+        if (!target.reactions[emoji].includes(userId)) {
+          target.reactions[emoji].push(userId);
+        }
+      }
+    }
+
+    if (cache) {
+      const cached = await cache.getJSON(`messages:${roomId}`);
+      if (Array.isArray(cached)) {
+        const updated = cached.map((m) => {
+          if (m.id !== messageId) return m;
+          const reactions = { ...(m.reactions || {}) };
+          const arr = reactions[emoji] ? [...reactions[emoji]] : [];
+          if (!arr.includes(userId)) arr.push(userId);
+          reactions[emoji] = arr;
+          return { ...m, reactions };
+        });
+        await cache.setJSON(`messages:${roomId}`, updated, MESSAGE_CACHE_TTL);
+      }
+    }
+
+    return { messageId, emoji, userId };
+  };
+
+  const removeReaction = async (roomId, messageId, userId, emoji) => {
+    if (!messageId || !userId || !emoji) {
+      return null;
+    }
+
+    if (collection) {
+      const key = `reactions.${emoji}`;
+      await collection.updateOne(
+        { roomId, id: messageId },
+        { $pull: { [key]: userId } }
+      );
+    } else {
+      const messages = getRoom(roomId);
+      const target = messages.find((m) => m.id === messageId);
+      if (target && target.reactions && target.reactions[emoji]) {
+        target.reactions[emoji] = target.reactions[emoji].filter((id) => id !== userId);
+        if (target.reactions[emoji].length === 0) {
+          delete target.reactions[emoji];
+        }
+      }
+    }
+
+    if (cache) {
+      const cached = await cache.getJSON(`messages:${roomId}`);
+      if (Array.isArray(cached)) {
+        const updated = cached.map((m) => {
+          if (m.id !== messageId) return m;
+          const reactions = { ...(m.reactions || {}) };
+          if (reactions[emoji]) {
+            reactions[emoji] = reactions[emoji].filter((id) => id !== userId);
+            if (reactions[emoji].length === 0) delete reactions[emoji];
+          }
+          return { ...m, reactions };
+        });
+        await cache.setJSON(`messages:${roomId}`, updated, MESSAGE_CACHE_TTL);
+      }
+    }
+
+    return { messageId, emoji, userId };
+  };
+
   return {
     list,
     save,
     markSeen,
     markEdited,
     markDeleted,
+    addReaction,
+    removeReaction,
     count
   };
 }

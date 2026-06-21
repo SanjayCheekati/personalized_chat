@@ -363,6 +363,80 @@ function initSocket(
       }
     });
 
+    const ALLOWED_REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🙏"];
+
+    socket.on("react_message", async (payload, ack) => {
+      const messageId = payload?.messageId;
+      const emoji = payload?.emoji;
+      if (!messageId || !emoji || !ALLOWED_REACTIONS.includes(emoji)) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "invalid_reaction" });
+        }
+        return;
+      }
+
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
+      try {
+        await messageStore.addReaction(activeRoomId, messageId, user.id, emoji);
+        io.to(activeRoomId).emit("message_reaction", {
+          messageId,
+          emoji,
+          userId: user.id,
+          action: "add"
+        });
+        if (typeof ack === "function") {
+          ack({ ok: true });
+        }
+      } catch {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "reaction_failed" });
+        }
+      }
+    });
+
+    socket.on("unreact_message", async (payload, ack) => {
+      const messageId = payload?.messageId;
+      const emoji = payload?.emoji;
+      if (!messageId || !emoji || !ALLOWED_REACTIONS.includes(emoji)) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "invalid_reaction" });
+        }
+        return;
+      }
+
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
+      try {
+        await messageStore.removeReaction(activeRoomId, messageId, user.id, emoji);
+        io.to(activeRoomId).emit("message_reaction", {
+          messageId,
+          emoji,
+          userId: user.id,
+          action: "remove"
+        });
+        if (typeof ack === "function") {
+          ack({ ok: true });
+        }
+      } catch {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "unreaction_failed" });
+        }
+      }
+    });
+
     socket.on("remember_admin", async (payload, ack) => {
       const activeRoomId = socket.data.roomId;
       if (!activeRoomId) {
@@ -386,7 +460,7 @@ function initSocket(
 
         const sender = userStore ? await userStore.findById(user.id) : null;
         const senderName = sender?.name || sender?.username || "Someone";
-        const formattedTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const formattedTime = payload?.localTime || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         const text = `${senderName} Remembered you at ${formattedTime}`;
 
         const message = await messageStore.save({
