@@ -15,7 +15,14 @@ import {
 
 const DEFAULT_STATUS = { connecting: false, connected: false, error: "" };
 
-export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout }) {
+export default function AdminDashboard({
+  auth,
+  theme,
+  onToggleTheme,
+  onLogout,
+  notificationsEnabled,
+  onToggleNotifications
+}) {
   const router = useRouter();
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
@@ -494,6 +501,14 @@ export default function AdminDashboard({ auth, theme, onToggleTheme, onLogout })
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={onToggleNotifications}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                aria-label="Toggle notifications"
+              >
+                <BellIcon enabled={notificationsEnabled} />
+              </button>
+              <button
+                type="button"
                 onClick={handleOpenGames}
                 className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)]"
                 aria-label="Games"
@@ -867,6 +882,21 @@ function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
       <path d="M6 7h12l-1 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-4h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1zm-3 2h12a1 1 0 1 1 0 2H6a1 1 0 1 1 0-2z" />
+    </svg>
+  );
+}
+
+function BellIcon({ enabled }) {
+  if (enabled) {
+    return (
+      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current text-[var(--accent)]" aria-hidden="true">
+        <path d="M12 22a2.01 2.01 0 0 0 2-2h-4a2.01 2.01 0 0 0 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current text-[var(--ink-soft)]" aria-hidden="true">
+      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
     </svg>
   );
 }

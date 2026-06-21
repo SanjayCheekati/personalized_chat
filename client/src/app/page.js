@@ -82,7 +82,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!auth || isAdmin) {
+    if (!auth) {
       return;
     }
     registerServiceWorker().catch((err) => console.error("SW registration error:", err));
@@ -90,7 +90,7 @@ export default function Home() {
     checkSubscriptionState().then((subscribed) => {
       setNotificationsEnabled(subscribed);
     });
-  }, [auth, isAdmin]);
+  }, [auth]);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("flashchat.theme") || "dark";
@@ -360,9 +360,7 @@ export default function Home() {
       localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
-      if (data.user?.role !== "admin") {
-        promptNotifications(data.token);
-      }
+      promptNotifications(data.token);
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "login_failed" }));
     }
@@ -391,9 +389,7 @@ export default function Home() {
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
       setSignupForm({ username: "", password: "", confirmPassword: "" });
-      if (data.user?.role !== "admin") {
-        promptNotifications(data.token);
-      }
+      promptNotifications(data.token);
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "signup_failed" }));
     }
@@ -791,6 +787,8 @@ export default function Home() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onLogout={handleLogout}
+        notificationsEnabled={notificationsEnabled}
+        onToggleNotifications={handleToggleNotifications}
       />
     );
   }
