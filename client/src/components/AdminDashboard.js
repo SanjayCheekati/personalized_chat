@@ -18,7 +18,6 @@ const DEFAULT_STATUS = { connecting: false, connected: false, error: "" };
 export default function AdminDashboard({
   auth,
   theme,
-  onToggleTheme,
   onLogout,
   notificationsEnabled,
   onToggleNotifications

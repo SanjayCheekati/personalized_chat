@@ -771,7 +771,6 @@ export default function Home() {
       <AdminDashboard
         auth={auth}
         theme={theme}
-        onToggleTheme={handleToggleTheme}
         onLogout={handleLogout}
         notificationsEnabled={notificationsEnabled}
         onToggleNotifications={handleToggleNotifications}
