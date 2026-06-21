@@ -2,29 +2,11 @@ const fs = require("fs");
 const path = require("path");
 
 if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
-  try {
-    const webpush = require("web-push");
-    console.log("Generating fresh VAPID keys for Web Push...");
-    const keys = webpush.generateVAPIDKeys();
-    process.env.VAPID_PUBLIC_KEY = keys.publicKey;
-    process.env.VAPID_PRIVATE_KEY = keys.privateKey;
-    process.env.VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:admin@flashchat.com";
-
-    const envPath = path.join(__dirname, "../../.env");
-    if (fs.existsSync(envPath)) {
-      let content = fs.readFileSync(envPath, "utf8");
-      if (!content.includes("VAPID_PUBLIC_KEY")) {
-        if (!content.endsWith("\n")) {
-          content += "\n";
-        }
-        content += `VAPID_PUBLIC_KEY=${keys.publicKey}\nVAPID_PRIVATE_KEY=${keys.privateKey}\nVAPID_EMAIL=mailto:admin@flashchat.com\n`;
-        fs.writeFileSync(envPath, content, "utf8");
-        console.log("Generated and persisted VAPID keys to server/.env");
-      }
-    }
-  } catch (error) {
-    console.warn("Could not auto-generate VAPID keys:", error.message);
-  }
+  // Use static fallback keys to maintain consistency across container restarts (e.g. on Render)
+  process.env.VAPID_PUBLIC_KEY = "BIPrq4PdFd3tDRTDqB6sadf7cdHG1zI-0zLVZiCqqnVWprV9RkXR98WdqoMJHzi0ipcSTZlKXN1tC-eSCG_N-1o";
+  process.env.VAPID_PRIVATE_KEY = "P_39j7AZ5CEOphgV_Lgdj0B14hd3hOJTD8CaUCYM_LE";
+  process.env.VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:akshayalukky@gmail.com";
+  console.warn("WARNING: Using default fallback VAPID keys. For production, set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in environment variables.");
 }
 
 const cleanEnvVar = (val) => {
