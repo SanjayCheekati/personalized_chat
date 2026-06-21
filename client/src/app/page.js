@@ -39,7 +39,7 @@ export default function Home() {
   const [replyTarget, setReplyTarget] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [theme, setTheme] = useState("dark");
+  const [theme] = useState("dark");
   const [authMode, setAuthMode] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -93,15 +93,8 @@ export default function Home() {
   }, [auth]);
 
   useEffect(() => {
-    const storedTheme = localStorage.getItem("flashchat.theme") || "dark";
-    setTheme(storedTheme);
-    document.body.dataset.theme = storedTheme;
+    document.body.dataset.theme = "dark";
   }, []);
-
-  useEffect(() => {
-    document.body.dataset.theme = theme;
-    localStorage.setItem("flashchat.theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     if (!auth?.user) {
@@ -534,14 +527,7 @@ export default function Home() {
     });
   };
 
-  const handleOpenGames = () => {
-    setMenuOpen(false);
-    router.push("/games");
-  };
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  };
 
   const handleTyping = (hasText) => {
     const socket = socketRef.current;
@@ -818,62 +804,25 @@ export default function Home() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {!peer.online ? (
-                <button
-                  type="button"
-                  onClick={handleRemember}
-                  className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white"
-                >
-                  Remember
-                </button>
-              ) : null}
               <button
                 type="button"
-                onClick={handleToggleTheme}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-[10px] font-semibold text-[var(--ink)]"
+                onClick={handleRemember}
+                className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5"
               >
-                {theme === "light" ? "Dark" : "Light"}
+                Remember
               </button>
               <button
                 type="button"
-                onClick={handleOpenGames}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
-                aria-label="Games"
+                onClick={handleToggleNotifications}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                aria-label="Toggle notifications"
               >
-                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
-                  <path d="M7.5 7.5h9A3.5 3.5 0 0 1 20 11v2.5A3.5 3.5 0 0 1 16.5 17h-9A3.5 3.5 0 0 1 4 13.5V11a3.5 3.5 0 0 1 3.5-3.5zm2 2a.75.75 0 1 0 0 1.5h1.5a.75.75 0 1 0 0-1.5H9.5zm-2 2.5a.75.75 0 1 0 0 1.5H9a.75.75 0 1 0 0-1.5H7.5zm9-1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-1.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z" />
-                </svg>
+                <BellIcon enabled={notificationsEnabled} />
               </button>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink-soft)]"
-                  aria-label="Menu"
-                >
-                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
-                    <path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0-.001-3.999A2 2 0 0 0 12 14zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
-                  </svg>
-                </button>
-                {menuOpen ? (
-                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-xs text-[var(--ink)] shadow-glow z-50">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        handleToggleNotifications();
-                      }}
-                      className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--panel)] transition font-semibold"
-                    >
-                      {notificationsEnabled ? "Disable Notifications" : "Enable Notifications"}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs font-semibold text-[var(--ink)]"
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-2 text-xs font-semibold text-[var(--ink)] transition hover:-translate-y-0.5"
               >
                 Sign out
               </button>
@@ -1049,5 +998,20 @@ function formatLastSeen(value) {
   }
 
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${formatTime(value)}`;
+}
+
+function BellIcon({ enabled }) {
+  if (enabled) {
+    return (
+      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current text-[var(--accent)]" aria-hidden="true">
+        <path d="M12 22a2.01 2.01 0 0 0 2-2h-4a2.01 2.01 0 0 0 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current text-[var(--ink-soft)]" aria-hidden="true">
+      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
+    </svg>
+  );
 }
 
