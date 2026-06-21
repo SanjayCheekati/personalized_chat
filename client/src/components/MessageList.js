@@ -9,6 +9,57 @@ function formatTime(value) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+const isSingleEmoji = (text) => {
+  if (!text) return false;
+  const trimmed = text.trim();
+  try {
+    const segmenter = new Intl.Segmenter();
+    const segments = Array.from(segmenter.segment(trimmed));
+    return segments.length === 1 && /[\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Emoji_Component}]/u.test(trimmed);
+  } catch (e) {
+    return /^[\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Emoji_Component}\u200D\uFE0F]+$/u.test(trimmed) && trimmed.length <= 8;
+  }
+};
+
+function formatMessageText(text) {
+  if (!text) return "";
+  
+  if (isSingleEmoji(text)) {
+    return <span className="text-5xl inline-block leading-none py-1 align-middle">{text}</span>;
+  }
+  
+  const emojiRegex = /(\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji}\uFE0F)(?:\u200D(\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji}\uFE0F))*/gu;
+  
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  emojiRegex.lastIndex = 0;
+  
+  while ((match = emojiRegex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    const matchStr = match[0];
+    
+    if (matchIndex > lastIndex) {
+      parts.push(text.substring(lastIndex, matchIndex));
+    }
+    
+    parts.push(
+      <span key={matchIndex} className="inline-block text-[1.4em] mx-[0.05em] align-middle leading-none">
+        {matchStr}
+      </span>
+    );
+    
+    lastIndex = emojiRegex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : text;
+}
+
 export default function MessageList({
   messages = [],
   currentUserId,
@@ -116,7 +167,7 @@ export default function MessageList({
               key={message.id || message.clientId || Math.random()}
               className="mx-auto rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-1 text-[11px] text-[var(--ink-soft)]"
             >
-              {isMine ? "You sent a reminder" : `${message.text} sent a reminder`}
+              {message.text}
             </div>
           );
         }
@@ -158,16 +209,16 @@ export default function MessageList({
                   This message was deleted.
                 </p>
               ) : (
-                <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                <p className="whitespace-pre-wrap break-words">
+                  {formatMessageText(message.text)}
+                  <span className="inline-block w-4" />
+                  <span className="inline-flex items-center gap-1 text-[9px] text-[var(--ink-soft)] float-right mt-1.5 select-none font-medium">
+                    {isEdited ? <span className="italic mr-0.5">edited</span> : null}
+                    <span>{formatTime(message.timestamp)}</span>
+                    {isMine ? <StatusTicks status={message.status} /> : null}
+                  </span>
+                </p>
               )}
-
-              <div className="mt-1 flex items-center justify-end gap-1.5 text-[10px] text-[var(--ink-soft)]">
-                {isEdited && !isDeleted ? (
-                  <span className="italic">edited</span>
-                ) : null}
-                <span>{formatTime(message.timestamp)}</span>
-                {isMine ? <StatusTicks status={message.status} /> : null}
-              </div>
 
               {!isDeleted ? (
                 <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">

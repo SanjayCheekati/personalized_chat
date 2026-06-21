@@ -412,6 +412,19 @@ export default function AdminDashboard({
 
 
 
+  const handleRemember = () => {
+    if (!socketRef.current || !activeConversationId) {
+      return;
+    }
+
+    const clientId = makeClientId();
+    socketRef.current.emit("remember_admin", { clientId }, (ack) => {
+      if (!ack?.ok) {
+        setStatus((prev) => ({ ...prev, error: "remember_failed" }));
+      }
+    });
+  };
+
   const handleBack = () => {
     if (adminPanelOpen) {
       setAdminPanelOpen(false);
@@ -496,6 +509,15 @@ export default function AdminDashboard({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {activeConversationId && !adminPanelOpen ? (
+                <button
+                  type="button"
+                  onClick={handleRemember}
+                  className="rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5"
+                >
+                  Remember
+                </button>
+              ) : null}
               {!notificationsEnabled ? (
                 <button
                   type="button"
@@ -514,7 +536,7 @@ export default function AdminDashboard({
               >
                 <SignOutIcon />
               </button>
-              {!adminPanelOpen ? (
+              {!adminPanelOpen && !activeConversationId ? (
                 <button
                   type="button"
                   onClick={handleOpenAdminPanel}

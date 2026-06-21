@@ -364,13 +364,6 @@ function initSocket(
     });
 
     socket.on("remember_admin", async (payload, ack) => {
-      if (isAdmin) {
-        if (typeof ack === "function") {
-          ack({ ok: false, error: "forbidden" });
-        }
-        return;
-      }
-
       const activeRoomId = socket.data.roomId;
       if (!activeRoomId) {
         if (typeof ack === "function") {
@@ -393,7 +386,8 @@ function initSocket(
 
         const sender = userStore ? await userStore.findById(user.id) : null;
         const senderName = sender?.name || sender?.username || "Someone";
-        const text = senderName;
+        const formattedTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const text = `${senderName} Remembered you at ${formattedTime}`;
 
         const message = await messageStore.save({
           roomId: activeRoomId,
@@ -415,7 +409,7 @@ function initSocket(
         if (receiverId) {
           sendPushNotification(receiverId, {
             title: senderName,
-            body: "sent you a nudge!",
+            body: text,
             roomId: activeRoomId
           }).catch((err) => console.error("Error sending push notification:", err));
         }
