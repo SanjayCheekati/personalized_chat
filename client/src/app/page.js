@@ -155,6 +155,17 @@ export default function Home() {
             (m) => m.senderId !== auth.user.id && !m.seen
           );
           setFirstUnreadId(firstUnseen ? firstUnseen.id : null);
+
+          // Play remember animation on load if B hasn't seen this remember event yet
+          const latestMessage = nextMessages[nextMessages.length - 1];
+          if (latestMessage && latestMessage.kind === "remember" && latestMessage.senderId !== auth.user.id) {
+            const playedKey = `remember_anim_played_${latestMessage.id}`;
+            if (!localStorage.getItem(playedKey)) {
+              const senderName = latestMessage.text?.split(" Remembered")[0] || "Someone";
+              setRememberAnimation({ visible: true, senderName });
+              localStorage.setItem(playedKey, "true");
+            }
+          }
         }
       })
       .catch((error) => {
@@ -256,6 +267,7 @@ export default function Home() {
       if (message.kind === "remember" && message.senderId !== auth.user.id) {
         const senderName = message.text?.split(" Remembered")[0] || "Someone";
         setRememberAnimation({ visible: true, senderName });
+        localStorage.setItem(`remember_anim_played_${message.id}`, "true");
       }
     });
 

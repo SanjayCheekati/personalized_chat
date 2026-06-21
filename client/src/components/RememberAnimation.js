@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 const HEARTS = ["❤️", "💕", "💖", "💗", "💓", "💞", "💘", "💝"];
 const SPARKLES = ["✨", "⭐", "🌟", "💫"];
 const PARTICLE_COUNT = 22;
-const ANIMATION_DURATION = 3500;
+const ANIMATION_DURATION = 1500;
 
 function randomBetween(min, max) {
   return Math.random() * (max - min) + min;
@@ -20,8 +20,8 @@ function generateParticles() {
       id: i,
       emoji: pool[Math.floor(Math.random() * pool.length)],
       left: randomBetween(5, 95),
-      delay: randomBetween(0, 1.8),
-      duration: randomBetween(2.2, 3.5),
+      delay: randomBetween(0, 0.4),
+      duration: randomBetween(0.8, 1.1),
       size: isHeart ? randomBetween(1.2, 2.8) : randomBetween(0.8, 1.6),
       startY: randomBetween(100, 130),
       sway: randomBetween(-30, 30)
