@@ -413,14 +413,11 @@ function initSocket(
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
         if (receiverId) {
-          const receiverActive = await presenceStore.isUserInRoom(activeRoomId, receiverId);
-          if (!receiverActive) {
-            sendPushNotification(receiverId, {
-              title: senderName,
-              body: "sent you a nudge!",
-              roomId: activeRoomId
-            }).catch((err) => console.error("Error sending push notification:", err));
-          }
+          sendPushNotification(receiverId, {
+            title: senderName,
+            body: "sent you a nudge!",
+            roomId: activeRoomId
+          }).catch((err) => console.error("Error sending push notification:", err));
         }
 
         if (typeof ack === "function") {
