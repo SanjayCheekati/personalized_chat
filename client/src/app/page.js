@@ -586,7 +586,8 @@ export default function Home() {
     }
 
     const clientId = makeClientId();
-    socketRef.current.emit("remember_admin", { clientId }, (ack) => {
+    const localTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    socketRef.current.emit("remember_admin", { clientId, localTime }, (ack) => {
       if (!ack?.ok) {
         setStatus((prev) => ({ ...prev, error: "remember_failed" }));
       }
