@@ -496,14 +496,16 @@ export default function AdminDashboard({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onToggleNotifications}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
-                aria-label="Toggle notifications"
-              >
-                <BellIcon enabled={notificationsEnabled} />
-              </button>
+              {!notificationsEnabled ? (
+                <button
+                  type="button"
+                  onClick={onToggleNotifications}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                  aria-label="Toggle notifications"
+                >
+                  <BellIcon enabled={notificationsEnabled} />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={onLogout}

@@ -353,7 +353,11 @@ export default function Home() {
       localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
-      promptNotifications(data.token);
+      checkSubscriptionState().then((enabled) => {
+        if (!enabled) {
+          promptNotifications(data.token);
+        }
+      });
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "login_failed" }));
     }
@@ -382,7 +386,11 @@ export default function Home() {
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
       setSignupForm({ username: "", password: "", confirmPassword: "" });
-      promptNotifications(data.token);
+      checkSubscriptionState().then((enabled) => {
+        if (!enabled) {
+          promptNotifications(data.token);
+        }
+      });
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "signup_failed" }));
     }
@@ -810,14 +818,16 @@ export default function Home() {
               >
                 Remember
               </button>
-              <button
-                type="button"
-                onClick={handleToggleNotifications}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
-                aria-label="Toggle notifications"
-              >
-                <BellIcon enabled={notificationsEnabled} />
-              </button>
+              {!notificationsEnabled ? (
+                <button
+                  type="button"
+                  onClick={handleToggleNotifications}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                  aria-label="Toggle notifications"
+                >
+                  <BellIcon enabled={notificationsEnabled} />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={handleLogout}
