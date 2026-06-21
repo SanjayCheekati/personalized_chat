@@ -89,8 +89,23 @@ export default function Home() {
 
     checkSubscriptionState().then((subscribed) => {
       setNotificationsEnabled(subscribed);
+      if (!subscribed) {
+        promptNotifications(auth.token);
+      }
     });
   }, [auth]);
+
+  useEffect(() => {
+    if (!auth || isAdmin) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      window.location.reload();
+    }, 15 * 60 * 1000); // 15 minutes
+
+    return () => clearInterval(intervalId);
+  }, [auth, isAdmin]);
 
   useEffect(() => {
     document.body.dataset.theme = "dark";
