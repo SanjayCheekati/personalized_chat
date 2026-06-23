@@ -207,6 +207,8 @@ export default function MessageInput({
         <button
           type="button"
           disabled={disabled}
+          onPointerDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
           onClick={submit}
           className="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-glow transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
         >
