@@ -120,6 +120,7 @@ function ReactionBadges({ reactions, currentUserId, onToggle }) {
 export default function MessageList({
   messages = [],
   currentUserId,
+  isAdmin = false,
   onDelete,
   onReply,
   onEdit,
@@ -356,7 +357,7 @@ export default function MessageList({
                       <ReplyIcon />
                     </button>
                   ) : null}
-                  {isMine && onEdit ? (
+                  {isAdmin && onEdit ? (
                     <button
                       type="button"
                       onClick={() => onEdit(message)}
@@ -366,7 +367,7 @@ export default function MessageList({
                       <EditIcon />
                     </button>
                   ) : null}
-                  {isMine && onDelete ? (
+                  {isAdmin && onDelete ? (
                     <button
                       type="button"
                       onClick={() => onDelete(message)}

@@ -158,7 +158,7 @@ function createMessageStore({ db, cache } = {}) {
     }
   };
 
-  const markEdited = async (roomId, messageId, senderId, text) => {
+  const markEdited = async (roomId, messageId, senderId, text, isAdmin = false) => {
     if (!messageId || !text) {
       return null;
     }
@@ -166,8 +166,12 @@ function createMessageStore({ db, cache } = {}) {
     const editedAt = new Date();
 
     if (collection) {
+      const query = { roomId, id: messageId };
+      if (!isAdmin) {
+        query.senderId = senderId;
+      }
       const result = await collection.findOneAndUpdate(
-        { roomId, id: messageId, senderId },
+        query,
         { $set: { text, edited: true, editedAt } },
         { returnDocument: "after" }
       );
@@ -190,7 +194,7 @@ function createMessageStore({ db, cache } = {}) {
 
     const messages = getRoom(roomId);
     const target = messages.find((message) => message.id === messageId);
-    if (!target || target.senderId !== senderId) {
+    if (!target || (!isAdmin && target.senderId !== senderId)) {
       return null;
     }
 

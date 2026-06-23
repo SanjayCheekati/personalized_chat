@@ -910,6 +910,7 @@ export default function Home() {
         <MessageList
           messages={messages}
           currentUserId={auth.user.id}
+          isAdmin={isAdmin}
           peerName={peer?.name || peer?.username || "Arjun"}
           onDelete={handleDelete}
           onReply={(message) => {

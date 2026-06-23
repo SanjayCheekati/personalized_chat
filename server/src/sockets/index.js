@@ -260,6 +260,13 @@ function initSocket(
     });
 
     socket.on("edit_message", async (payload, ack) => {
+      if (!isAdmin) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "forbidden" });
+        }
+        return;
+      }
+
       const messageId = payload?.messageId;
       const text = String(payload?.text || "").trim();
       if (!messageId || !text) {
@@ -278,7 +285,7 @@ function initSocket(
       }
 
       try {
-        const updated = await messageStore.markEdited(activeRoomId, messageId, user.id, text);
+        const updated = await messageStore.markEdited(activeRoomId, messageId, user.id, text, isAdmin);
         if (!updated) {
           if (typeof ack === "function") {
             ack({ ok: false, error: "edit_forbidden" });
@@ -306,6 +313,13 @@ function initSocket(
     });
 
     socket.on("delete_message", async (payload, ack) => {
+      if (!isAdmin) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "forbidden" });
+        }
+        return;
+      }
+
       const messageId = payload?.messageId;
       if (!messageId) {
         if (typeof ack === "function") {

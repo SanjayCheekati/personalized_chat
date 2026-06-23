@@ -29,6 +29,7 @@ export default function AdminDashboard({
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
   const [status, setStatus] = useState(DEFAULT_STATUS);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -339,6 +340,26 @@ export default function AdminDashboard({
 
     setFirstUnreadId(null);
 
+    if (editingMessage?.id) {
+      const editedAt = new Date().toISOString();
+      setMessages((prev) => markMessageEdited(prev, editingMessage.id, trimmed, editedAt));
+      socketRef.current.emit(
+        "edit_message",
+        { messageId: editingMessage.id, text: trimmed },
+        (ack) => {
+          if (!ack?.ok || !ack?.message) {
+            setStatus((prev) => ({ ...prev, error: "edit_failed" }));
+            return;
+          }
+          setMessages((prev) => upsertMessage(prev, ack.message, auth.user.id));
+        }
+      );
+      setEditingMessage(null);
+      setReplyTarget(null);
+      setDraft("");
+      return;
+    }
+
     const clientId = makeClientId();
     const replyTo = replyTarget
       ? {
@@ -373,6 +394,32 @@ export default function AdminDashboard({
 
     setReplyTarget(null);
     setDraft("");
+  };
+
+  const handleEdit = (message) => {
+    if (message.deleted || !message.id) {
+      return;
+    }
+    setEditingMessage({ id: message.id, text: message.text });
+    setDraft(message.text || "");
+    setReplyTarget(null);
+  };
+
+  const handleDelete = (message) => {
+    if (!auth || !socketRef.current || !message?.id) {
+      return;
+    }
+
+    if (!window.confirm("Delete this message for both of you?")) {
+      return;
+    }
+
+    setMessages((prev) => markMessageDeleted(prev, message.id, auth.user.id));
+    socketRef.current.emit("delete_message", { messageId: message.id }, (ack) => {
+      if (!ack?.ok) {
+        setStatus((prev) => ({ ...prev, error: "delete_failed" }));
+      }
+    });
   };
 
   const handleTyping = (hasText) => {
@@ -673,11 +720,15 @@ export default function AdminDashboard({
                 <MessageList
                   messages={messages}
                   currentUserId={auth.user.id}
+                  isAdmin={true}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
                   onReply={(message) => {
                     if (message.deleted) {
                       return;
                     }
                     setReplyTarget(message);
+                    setEditingMessage(null);
                   }}
                   onReact={handleReact}
                   hasMore={hasMore}
@@ -700,6 +751,11 @@ export default function AdminDashboard({
                   onTyping={handleTyping}
                   replyTarget={replyTarget}
                   onCancelReply={() => setReplyTarget(null)}
+                  editingMessage={editingMessage}
+                  onCancelEdit={() => {
+                    setEditingMessage(null);
+                    setDraft("");
+                  }}
                   typingPreview={""}
                   theme={theme}
                   keepFocus
@@ -850,6 +906,14 @@ function markMessageDeleted(list, messageId, deletedBy) {
   return list.map((message) =>
     message.id === messageId
       ? { ...message, deleted: true, deletedBy, status: "deleted" }
+      : message
+  );
+}
+
+function markMessageEdited(list, messageId, text, editedAt) {
+  return list.map((message) =>
+    message.id === messageId
+      ? { ...message, text, edited: true, editedAt, status: message.status }
       : message
   );
 }

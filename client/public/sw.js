@@ -8,12 +8,15 @@ self.addEventListener("push", (event) => {
     const title = data.title || "New Message";
     const options = {
       body: data.body || "",
-      tag: data.tag || "flashchat-msg",
       data: {
         roomId: data.roomId,
         url: data.url || "/"
       }
     };
+
+    if (data.tag) {
+      options.tag = data.tag;
+    }
 
     event.waitUntil(self.registration.showNotification(title, options));
   } catch (err) {
