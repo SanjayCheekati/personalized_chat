@@ -777,7 +777,7 @@ export default function AdminDashboard({
               <div className="space-y-2">
                 {filteredConversations.map((conversation) => {
                   const preview = conversation.lastMessage?.deleted
-                    ? "Message deleted"
+                    ? ""
                     : conversation.lastMessage?.text || "";
                   const timestamp = conversation.lastMessageAt || conversation.updatedAt;
 

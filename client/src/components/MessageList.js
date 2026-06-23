@@ -60,63 +60,6 @@ function formatMessageText(text) {
   return parts.length > 0 ? parts : text;
 }
 
-const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "👍", "🙏"];
-
-function ReactionBar({ onSelect }) {
-  return (
-    <div className="reaction-bar">
-      {QUICK_REACTIONS.map((emoji) => (
-        <button
-          key={emoji}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(emoji);
-          }}
-        >
-          {emoji}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ReactionBadges({ reactions, currentUserId, onToggle }) {
-  if (!reactions || typeof reactions !== "object") {
-    return null;
-  }
-
-  const entries = Object.entries(reactions).filter(
-    ([, users]) => Array.isArray(users) && users.length > 0
-  );
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="reaction-badges">
-      {entries.map(([emoji, users]) => {
-        const isMine = users.includes(currentUserId);
-        return (
-          <button
-            key={emoji}
-            type="button"
-            className={`reaction-badge${isMine ? " mine" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle(emoji, isMine);
-            }}
-          >
-            <span>{emoji}</span>
-            {users.length > 1 ? <span className="count">{users.length}</span> : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function MessageList({
   messages = [],
   currentUserId,
@@ -132,13 +75,12 @@ export default function MessageList({
 }) {
   const endRef = useRef(null);
   const listRef = useRef(null);
-  const prevMessagesLength = useRef(messages.length);
+  const prevMessagesLength = useRef(0);
   const prevScrollHeight = useRef(0);
   const prevLastMessageIdRef = useRef(null);
-  const [reactionOpenId, setReactionOpenId] = useState(null);
-  const longPressTimer = useRef(null);
 
-  const groupedMessages = useMemo(() => groupMessagesByDate(messages), [messages]);
+  const filteredMessages = useMemo(() => messages.filter((m) => !m.deleted), [messages]);
+  const groupedMessages = useMemo(() => groupMessagesByDate(filteredMessages), [filteredMessages]);
 
   useEffect(() => {
     const container = listRef.current?.parentElement;
@@ -146,10 +88,10 @@ export default function MessageList({
       return;
     }
 
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = filteredMessages[filteredMessages.length - 1];
     const lastId = lastMessage ? (lastMessage.id || lastMessage.clientId) : null;
 
-    if (messages.length > prevMessagesLength.current) {
+    if (filteredMessages.length > prevMessagesLength.current) {
       if (lastId === prevLastMessageIdRef.current) {
         // Prepended older messages (history load)
         const scrollDifference = container.scrollHeight - prevScrollHeight.current;
@@ -161,7 +103,7 @@ export default function MessageList({
           marker.scrollIntoView({ behavior: "smooth" });
         }
       }
-    } else if (messages.length > 0 && prevMessagesLength.current === 0) {
+    } else if (filteredMessages.length > 0 && prevMessagesLength.current === 0) {
       // Initial load
       const marker = endRef.current;
       if (marker) {
@@ -169,44 +111,10 @@ export default function MessageList({
       }
     }
 
-    prevMessagesLength.current = messages.length;
+    prevMessagesLength.current = filteredMessages.length;
     prevScrollHeight.current = container.scrollHeight;
     prevLastMessageIdRef.current = lastId;
-  }, [messages]);
-
-  // Close reaction bar when clicking outside
-  useEffect(() => {
-    if (!reactionOpenId) return;
-    const handleClick = () => setReactionOpenId(null);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, [reactionOpenId]);
-
-  const handleReactionSelect = useCallback((messageId, emoji) => {
-    setReactionOpenId(null);
-    if (onReact) {
-      onReact(messageId, emoji);
-    }
-  }, [onReact]);
-
-  const handleReactionToggle = useCallback((messageId, emoji, isMine) => {
-    if (onReact) {
-      onReact(messageId, emoji, isMine ? "remove" : "add");
-    }
-  }, [onReact]);
-
-  const handleTouchStart = useCallback((messageId) => {
-    longPressTimer.current = setTimeout(() => {
-      setReactionOpenId((prev) => (prev === messageId ? null : messageId));
-    }, 400);
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
+  }, [filteredMessages]);
 
   return (
     <div ref={listRef} className="flex min-h-full flex-col gap-3">
@@ -252,8 +160,6 @@ export default function MessageList({
 
         const message = item;
         const isMine = message.senderId === currentUserId;
-        const isDeleted = Boolean(message.deleted);
-        const isEdited = Boolean(message.edited);
         const isRemember = message.kind === "remember";
 
         if (isRemember) {
@@ -270,7 +176,6 @@ export default function MessageList({
         }
 
         const showNewMessagesLine = message.id === firstUnreadId;
-        const showReactionBar = reactionOpenId === (message.id || message.clientId);
 
         return (
           <Fragment key={message.id || message.clientId || Math.random()}>
@@ -285,116 +190,88 @@ export default function MessageList({
             ) : null}
             <div
               className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
-              onTouchStart={() => !isDeleted && message.id && handleTouchStart(message.id || message.clientId)}
-              onTouchEnd={handleTouchEnd}
-              onTouchCancel={handleTouchEnd}
             >
-            <div className="relative max-w-[80%] sm:max-w-[70%]">
-              {/* Reaction bar */}
-              {showReactionBar && !isDeleted ? (
-                <div className={`absolute -top-12 ${isMine ? "right-0" : "left-0"} z-20`}>
-                  <ReactionBar
-                    onSelect={(emoji) => handleReactionSelect(message.id, emoji)}
-                  />
-                </div>
-              ) : null}
+              <div className="relative max-w-[80%] sm:max-w-[70%]">
+                <div
+                  className={`rounded-2xl border px-3 py-2 text-sm ${
+                    isMine
+                      ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
+                      : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
+                  }`}
+                >
+                  {message.replyTo ? (
+                    <div className="mb-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-1.5 text-xs text-[var(--ink-soft)]">
+                      <p className="font-semibold text-[var(--ink)]">Reply</p>
+                      <p className="mt-0.5 line-clamp-2">
+                        {message.replyTo.text || ""}
+                      </p>
+                    </div>
+                  ) : null}
 
-              <div
-                className={`rounded-2xl border px-3 py-2 text-sm ${
-                  isMine
-                    ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
-                    : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
-                }`}
-              >
-              {message.replyTo ? (
-                <div className="mb-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-1.5 text-xs text-[var(--ink-soft)]">
-                  <p className="font-semibold text-[var(--ink)]">Reply</p>
-                  <p className="mt-0.5 line-clamp-2">
-                    {message.replyTo.text || ""}
+                  <p className="whitespace-pre-wrap break-words">
+                    {formatMessageText(message.text)}
+                    <span className="inline-block w-4" />
+                    <span className="inline-flex items-center gap-1 text-[9px] text-[var(--ink-soft)] float-right mt-1.5 select-none font-medium">
+                      <span>{formatTime(message.timestamp)}</span>
+                      {isMine ? <StatusTicks status={message.status} /> : null}
+                    </span>
                   </p>
-                </div>
-              ) : null}
 
-              {isDeleted ? (
-                <p className="italic text-[var(--ink-soft)]">
-                  This message was deleted.
-                </p>
-              ) : (
-                <p className="whitespace-pre-wrap break-words">
-                  {formatMessageText(message.text)}
-                  <span className="inline-block w-4" />
-                  <span className="inline-flex items-center gap-1 text-[9px] text-[var(--ink-soft)] float-right mt-1.5 select-none font-medium">
-                    {isEdited ? <span className="italic mr-0.5">edited</span> : null}
-                    <span>{formatTime(message.timestamp)}</span>
-                    {isMine ? <StatusTicks status={message.status} /> : null}
-                  </span>
-                </p>
-              )}
-
-              {/* Hover toolbar */}
-              {!isDeleted ? (
-                <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">
-                  {onReact && message.id ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setReactionOpenId((prev) => (prev === message.id ? null : message.id));
-                      }}
-                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
-                      aria-label="React"
-                    >
-                      <SmileIcon />
-                    </button>
-                  ) : null}
-                  {onReply ? (
-                    <button
-                      type="button"
-                      onClick={() => onReply(message)}
-                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
-                      aria-label="Reply"
-                    >
-                      <ReplyIcon />
-                    </button>
-                  ) : null}
-                  {isAdmin && onEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => onEdit(message)}
-                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
-                      aria-label="Edit"
-                    >
-                      <EditIcon />
-                    </button>
-                  ) : null}
-                  {isAdmin && onDelete ? (
-                    <button
-                      type="button"
-                      onClick={() => onDelete(message)}
-                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--accent-warm)] shadow-sm transition hover:text-[var(--ink)]"
-                      aria-label="Delete"
-                    >
-                      <TrashIcon />
-                    </button>
-                  ) : null}
+                  {/* Hover toolbar */}
+                  <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">
+                    {isAdmin ? (
+                      <>
+                        {onDelete ? (
+                          <button
+                            type="button"
+                            onClick={() => onDelete(message)}
+                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--accent-warm)] shadow-sm transition hover:text-[var(--ink)]"
+                            aria-label="Delete"
+                          >
+                            <TrashIcon />
+                          </button>
+                        ) : null}
+                        {onEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => onEdit(message)}
+                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                            aria-label="Edit"
+                          >
+                            <EditIcon />
+                          </button>
+                        ) : null}
+                        {onReply ? (
+                          <button
+                            type="button"
+                            onClick={() => onReply(message)}
+                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                            aria-label="Reply"
+                          >
+                            <ReplyIcon />
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        {onReply ? (
+                          <button
+                            type="button"
+                            onClick={() => onReply(message)}
+                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                            aria-label="Reply"
+                          >
+                            <ReplyIcon />
+                          </button>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
                 </div>
-              ) : null}
               </div>
-
-              {/* Reaction badges */}
-              {!isDeleted && message.reactions ? (
-                <ReactionBadges
-                  reactions={message.reactions}
-                  currentUserId={currentUserId}
-                  onToggle={(emoji, isMine) =>
-                    handleReactionToggle(message.id, emoji, isMine)
-                  }
-                />
-              ) : null}
             </div>
-          </div>
-        </Fragment>
-      );
+          </Fragment>
+        );
       })}
       <div ref={endRef} />
     </div>
@@ -414,14 +291,6 @@ function StatusTicks({ status }) {
     status === "seen" ? "text-[var(--tick-seen)]" : "text-[var(--ink-soft)]";
 
   return <span className={className}>✓✓</span>;
-}
-
-function SmileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-6c.78 2.34 2.72 4 5 4s4.22-1.66 5-4H7zm1-2c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm8 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1z" />
-    </svg>
-  );
 }
 
 function ReplyIcon() {
