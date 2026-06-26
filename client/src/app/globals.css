@@ -358,3 +358,15 @@ body {
 .reaction-badge.mine .count {
   color: var(--ink);
 }
+
+.chat-link {
+  color: var(--tick-seen);
+  text-decoration: underline;
+  word-break: break-all;
+  transition: opacity 0.15s ease;
+}
+
+.chat-link:hover {
+  opacity: 0.8;
+}
+

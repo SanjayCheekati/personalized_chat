@@ -21,13 +21,50 @@ const isSingleEmoji = (text) => {
   }
 };
 
-function formatMessageText(text) {
-  if (!text) return "";
-  
-  if (isSingleEmoji(text)) {
-    return <span className="text-5xl inline-block leading-none py-1 align-middle">{text}</span>;
+function parseTextWithLinks(text) {
+  const URL_REGEX = /(?:https?:\/\/|www\.)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?|(?<![\w@])[a-zA-Z0-9-]+\.(?:com|net|org|io|dev|co|in|info|app|gov|edu|me|xyz)(?:\/[^\s]*)?/gi;
+
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  URL_REGEX.lastIndex = 0;
+
+  while ((match = URL_REGEX.exec(text)) !== null) {
+    let matchStr = match[0];
+    let matchIndex = match.index;
+
+    const trailingPuncRegex = /[.,!?;:)\]}]+$/;
+    let trailingPuncLength = 0;
+    const puncMatch = matchStr.match(trailingPuncRegex);
+    if (puncMatch) {
+      trailingPuncLength = puncMatch[0].length;
+      matchStr = matchStr.slice(0, -trailingPuncLength);
+    }
+
+    if (matchIndex > lastIndex) {
+      parts.push({ type: "text", content: text.substring(lastIndex, matchIndex) });
+    }
+
+    let href = matchStr;
+    if (!/^https?:\/\//i.test(href)) {
+      href = "http://" + href;
+    }
+
+    parts.push({ type: "link", content: matchStr, href });
+
+    lastIndex = URL_REGEX.lastIndex - trailingPuncLength;
+    URL_REGEX.lastIndex = lastIndex;
   }
-  
+
+  if (lastIndex < text.length) {
+    parts.push({ type: "text", content: text.substring(lastIndex) });
+  }
+
+  return parts;
+}
+
+function parseEmojis(text, chunkIndex) {
   const emojiRegex = /(\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji}\uFE0F)(?:\u200D(\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji}\uFE0F))*/gu;
   
   const parts = [];
@@ -45,7 +82,7 @@ function formatMessageText(text) {
     }
     
     parts.push(
-      <span key={matchIndex} className="inline-block text-[1.4em] mx-[0.05em] align-middle leading-none">
+      <span key={`emoji-${chunkIndex}-${matchIndex}`} className="inline-block text-[1.4em] mx-[0.05em] align-middle leading-none">
         {matchStr}
       </span>
     );
@@ -58,6 +95,42 @@ function formatMessageText(text) {
   }
   
   return parts.length > 0 ? parts : text;
+}
+
+function formatMessageText(text) {
+  if (!text) return "";
+  
+  if (isSingleEmoji(text)) {
+    return <span className="text-5xl inline-block leading-none py-1 align-middle">{text}</span>;
+  }
+  
+  const chunks = parseTextWithLinks(text);
+  const result = [];
+  
+  chunks.forEach((chunk, index) => {
+    if (chunk.type === "link") {
+      result.push(
+        <a
+          key={`link-${index}`}
+          href={chunk.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="chat-link"
+        >
+          {chunk.content}
+        </a>
+      );
+    } else {
+      const emojiParts = parseEmojis(chunk.content, index);
+      if (Array.isArray(emojiParts)) {
+        result.push(...emojiParts);
+      } else {
+        result.push(emojiParts);
+      }
+    }
+  });
+  
+  return result;
 }
 
 export default function MessageList({
