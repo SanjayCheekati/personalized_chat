@@ -546,7 +546,7 @@ export default function AdminDashboard({
 
   const typingPreview = activeConversationId
     ? typingByConversation[activeConversationId]
-      ? "User is typing..."
+      ? `${activeUser?.name || activeUser?.username || "User"} is typing...`
       : ""
     : "";
 
@@ -756,18 +756,6 @@ export default function AdminDashboard({
                   onLoadMore={handleLoadMore}
                   firstUnreadId={firstUnreadId}
                 />
-                {typingPreview ? (
-                  <div className="flex items-center justify-end gap-2 mt-3 animate-fade-in">
-                    <p className="text-xs text-[var(--ink-soft)]">
-                      {typingPreview}
-                    </p>
-                    <div className="typing-indicator select-none">
-                      <span className="typing-dot" />
-                      <span className="typing-dot" />
-                      <span className="typing-dot" />
-                    </div>
-                  </div>
-                ) : null}
               </div>
               <div className="border-t border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
                 <MessageInput
@@ -783,7 +771,7 @@ export default function AdminDashboard({
                     setEditingMessage(null);
                     setDraft("");
                   }}
-                  typingPreview={""}
+                  typingPreview={typingPreview}
                   theme={theme}
                   keepFocus
                 />
