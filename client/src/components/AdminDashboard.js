@@ -95,6 +95,10 @@ export default function AdminDashboard({
 
     socket.on("connect", () => {
       setStatus({ connecting: false, connected: true, error: "" });
+      const currentId = activeConversationRef.current;
+      if (currentId) {
+        socket.emit("join_conversation", { conversationId: currentId });
+      }
     });
 
     socket.on("disconnect", () => {
