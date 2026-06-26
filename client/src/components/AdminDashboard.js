@@ -732,52 +732,38 @@ export default function AdminDashboard({
           ) : activeConversationId ? (
             <section className="flex min-h-0 flex-1 flex-col">
               <div className="chat-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-                {!toggleOn ? (
-                  <div className="flex flex-1 flex-col items-center justify-center text-center p-6 animate-fade-in my-auto">
-                    <div className="h-16 w-16 rounded-full bg-[var(--panel-dark)] border border-[var(--panel-border)] flex items-center justify-center text-2xl mb-4 shadow-inner animate-pulse select-none">
-                      🔒
-                    </div>
-                    <h3 className="text-base font-semibold text-[var(--ink)]">Messages Hidden</h3>
-                    <p className="text-xs text-[var(--ink-soft)] mt-1 max-w-[200px]">
-                      Click the profile icon to toggle visibility.
+                <MessageList
+                  messages={toggleOn ? messages : messages.slice(-2)}
+                  currentUserId={auth.user.id}
+                  isAdmin={true}
+                  peerName={activeUser?.name || activeUser?.username || "User"}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                  onReply={(message) => {
+                    if (message.deleted) {
+                      return;
+                    }
+                    setReplyTarget(message);
+                    setEditingMessage(null);
+                  }}
+                  onReact={handleReact}
+                  hasMore={toggleOn ? hasMore : false}
+                  loadingMore={loadingMore}
+                  onLoadMore={handleLoadMore}
+                  firstUnreadId={firstUnreadId}
+                />
+                {typingPreview ? (
+                  <div className="flex items-center justify-end gap-2 mt-3 animate-fade-in">
+                    <p className="text-xs text-[var(--ink-soft)]">
+                      {typingPreview}
                     </p>
+                    <div className="typing-indicator select-none">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <MessageList
-                      messages={messages}
-                      currentUserId={auth.user.id}
-                      isAdmin={true}
-                      peerName={activeUser?.name || activeUser?.username || "User"}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onReply={(message) => {
-                        if (message.deleted) {
-                          return;
-                        }
-                        setReplyTarget(message);
-                        setEditingMessage(null);
-                      }}
-                      onReact={handleReact}
-                      hasMore={hasMore}
-                      loadingMore={loadingMore}
-                      onLoadMore={handleLoadMore}
-                      firstUnreadId={firstUnreadId}
-                    />
-                    {typingPreview ? (
-                      <div className="flex items-center justify-end gap-2 mt-3 animate-fade-in">
-                        <p className="text-xs text-[var(--ink-soft)]">
-                          {typingPreview}
-                        </p>
-                        <div className="typing-indicator select-none">
-                          <span className="typing-dot" />
-                          <span className="typing-dot" />
-                          <span className="typing-dot" />
-                        </div>
-                      </div>
-                    ) : null}
-                  </>
-                )}
+                ) : null}
               </div>
               <div className="border-t border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
                 <MessageInput

@@ -913,52 +913,38 @@ export default function Home() {
           />
         }
       >
-        {!toggleOn ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-center p-6 animate-fade-in">
-            <div className="h-16 w-16 rounded-full bg-[var(--panel-dark)] border border-[var(--panel-border)] flex items-center justify-center text-2xl mb-4 shadow-inner animate-pulse select-none">
-              🔒
-            </div>
-            <h3 className="text-base font-semibold text-[var(--ink)]">Messages Hidden</h3>
-            <p className="text-xs text-[var(--ink-soft)] mt-1 max-w-[200px]">
-              Click the profile icon to toggle visibility.
-            </p>
-          </div>
-        ) : (
-          <>
-            <MessageList
-              messages={messages}
-              currentUserId={auth.user.id}
-              isAdmin={isAdmin}
-              peerName={peer?.name || peer?.username || "Arjun"}
-              onDelete={handleDelete}
-              onReply={(message) => {
-                if (message.deleted) {
-                  return;
-                }
-                setReplyTarget(message);
-                setEditingMessage(null);
-              }}
-              onEdit={(message) => {
-                if (message.deleted || !message.id) {
-                  return;
-                }
-                setEditingMessage({ id: message.id, text: message.text });
-                setDraft(message.text || "");
-                setReplyTarget(null);
-              }}
-              onReact={handleReact}
-              hasMore={hasMore}
-              loadingMore={loadingMore}
-              onLoadMore={handleLoadMore}
-              firstUnreadId={firstUnreadId}
-            />
-            {seenAtMessage ? (
-              <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
-                Seen at {formatTime(seenAtMessage.seenAt || seenAtMessage.timestamp)}
-              </p>
-            ) : null}
-          </>
-        )}
+        <MessageList
+          messages={toggleOn ? messages : messages.slice(-2)}
+          currentUserId={auth.user.id}
+          isAdmin={isAdmin}
+          peerName={peer?.name || peer?.username || "Arjun"}
+          onDelete={handleDelete}
+          onReply={(message) => {
+            if (message.deleted) {
+              return;
+            }
+            setReplyTarget(message);
+            setEditingMessage(null);
+          }}
+          onEdit={(message) => {
+            if (message.deleted || !message.id) {
+              return;
+            }
+            setEditingMessage({ id: message.id, text: message.text });
+            setDraft(message.text || "");
+            setReplyTarget(null);
+          }}
+          onReact={handleReact}
+          hasMore={toggleOn ? hasMore : false}
+          loadingMore={loadingMore}
+          onLoadMore={handleLoadMore}
+          firstUnreadId={firstUnreadId}
+        />
+        {seenAtMessage ? (
+          <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
+            Seen at {formatTime(seenAtMessage.seenAt || seenAtMessage.timestamp)}
+          </p>
+        ) : null}
       </ChatShell>
       <RememberAnimation
         visible={rememberAnimation.visible}
