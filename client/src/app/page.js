@@ -68,6 +68,7 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [firstUnreadId, setFirstUnreadId] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [toggleOn, setToggleOn] = useState(true);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const isAdmin = auth?.user?.role === "admin";
@@ -857,9 +858,14 @@ export default function Home() {
         header={
           <div className="flex w-full flex-nowrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm text-[#ef4b5f]">
-                ❤️
-              </div>
+              <button
+                type="button"
+                onClick={() => setToggleOn((prev) => !prev)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white cursor-pointer transition-transform active:scale-95 select-none outline-none border-none"
+                aria-label="Toggle chat messages visibility"
+              >
+                <HeartIcon className={toggleOn ? "text-[#ef4b5f]" : "text-black"} />
+              </button>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[var(--ink)]">{peer.name}</p>
                 <p className="text-xs text-[var(--ink-soft)]">{headerStatus}</p>
@@ -907,38 +913,52 @@ export default function Home() {
           />
         }
       >
-        <MessageList
-          messages={messages}
-          currentUserId={auth.user.id}
-          isAdmin={isAdmin}
-          peerName={peer?.name || peer?.username || "Arjun"}
-          onDelete={handleDelete}
-          onReply={(message) => {
-            if (message.deleted) {
-              return;
-            }
-            setReplyTarget(message);
-            setEditingMessage(null);
-          }}
-          onEdit={(message) => {
-            if (message.deleted || !message.id) {
-              return;
-            }
-            setEditingMessage({ id: message.id, text: message.text });
-            setDraft(message.text || "");
-            setReplyTarget(null);
-          }}
-          onReact={handleReact}
-          hasMore={hasMore}
-          loadingMore={loadingMore}
-          onLoadMore={handleLoadMore}
-          firstUnreadId={firstUnreadId}
-        />
-        {seenAtMessage ? (
-          <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
-            Seen at {formatTime(seenAtMessage.seenAt || seenAtMessage.timestamp)}
-          </p>
-        ) : null}
+        {!toggleOn ? (
+          <div className="flex flex-1 flex-col items-center justify-center text-center p-6 animate-fade-in">
+            <div className="h-16 w-16 rounded-full bg-[var(--panel-dark)] border border-[var(--panel-border)] flex items-center justify-center text-2xl mb-4 shadow-inner animate-pulse select-none">
+              🔒
+            </div>
+            <h3 className="text-base font-semibold text-[var(--ink)]">Messages Hidden</h3>
+            <p className="text-xs text-[var(--ink-soft)] mt-1 max-w-[200px]">
+              Click the profile icon to toggle visibility.
+            </p>
+          </div>
+        ) : (
+          <>
+            <MessageList
+              messages={messages}
+              currentUserId={auth.user.id}
+              isAdmin={isAdmin}
+              peerName={peer?.name || peer?.username || "Arjun"}
+              onDelete={handleDelete}
+              onReply={(message) => {
+                if (message.deleted) {
+                  return;
+                }
+                setReplyTarget(message);
+                setEditingMessage(null);
+              }}
+              onEdit={(message) => {
+                if (message.deleted || !message.id) {
+                  return;
+                }
+                setEditingMessage({ id: message.id, text: message.text });
+                setDraft(message.text || "");
+                setReplyTarget(null);
+              }}
+              onReact={handleReact}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
+              onLoadMore={handleLoadMore}
+              firstUnreadId={firstUnreadId}
+            />
+            {seenAtMessage ? (
+              <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
+                Seen at {formatTime(seenAtMessage.seenAt || seenAtMessage.timestamp)}
+              </p>
+            ) : null}
+          </>
+        )}
       </ChatShell>
       <RememberAnimation
         visible={rememberAnimation.visible}
@@ -1097,6 +1117,14 @@ function BellIcon({ enabled }) {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current text-[var(--ink-soft)]" aria-hidden="true">
       <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
+    </svg>
+  );
+}
+
+function HeartIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`h-5 w-5 fill-current transition-colors duration-200 ${className}`} aria-hidden="true">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
     </svg>
   );
 }

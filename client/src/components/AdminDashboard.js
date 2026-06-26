@@ -46,6 +46,7 @@ export default function AdminDashboard({
   const [rememberAnimation, setRememberAnimation] = useState({ visible: false, senderName: "" });
   const [rememberCooldown, setRememberCooldown] = useState(false);
   const rememberCooldownRef = useRef(null);
+  const [toggleOn, setToggleOn] = useState(true);
 
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
@@ -221,6 +222,8 @@ export default function AdminDashboard({
   }, [auth.token, auth.user.id]);
 
   useEffect(() => {
+    setToggleOn(true);
+
     if (!activeConversationId || !auth.token) {
       setMessages([]);
       setDraft("");
@@ -589,6 +592,18 @@ export default function AdminDashboard({
                   <BackIcon />
                 </button>
               ) : null}
+              {activeConversationId && !adminPanelOpen && (
+                <button
+                  type="button"
+                  onClick={() => setToggleOn((prev) => !prev)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold cursor-pointer active:scale-95 transition-all select-none outline-none border-none ${
+                    toggleOn ? "bg-[#ef4b5f] text-white" : "bg-black text-white"
+                  }`}
+                  aria-label="Toggle chat messages visibility"
+                >
+                  {(activeUser?.name || "?").slice(0, 2).toUpperCase()}
+                </button>
+              )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[var(--ink)]">
                   {headerTitle}
@@ -717,30 +732,52 @@ export default function AdminDashboard({
           ) : activeConversationId ? (
             <section className="flex min-h-0 flex-1 flex-col">
               <div className="chat-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-                <MessageList
-                  messages={messages}
-                  currentUserId={auth.user.id}
-                  isAdmin={true}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  onReply={(message) => {
-                    if (message.deleted) {
-                      return;
-                    }
-                    setReplyTarget(message);
-                    setEditingMessage(null);
-                  }}
-                  onReact={handleReact}
-                  hasMore={hasMore}
-                  loadingMore={loadingMore}
-                  onLoadMore={handleLoadMore}
-                  firstUnreadId={firstUnreadId}
-                />
-                {typingPreview ? (
-                  <p className="mt-3 text-right text-xs text-[var(--ink-soft)]">
-                    {typingPreview}
-                  </p>
-                ) : null}
+                {!toggleOn ? (
+                  <div className="flex flex-1 flex-col items-center justify-center text-center p-6 animate-fade-in my-auto">
+                    <div className="h-16 w-16 rounded-full bg-[var(--panel-dark)] border border-[var(--panel-border)] flex items-center justify-center text-2xl mb-4 shadow-inner animate-pulse select-none">
+                      🔒
+                    </div>
+                    <h3 className="text-base font-semibold text-[var(--ink)]">Messages Hidden</h3>
+                    <p className="text-xs text-[var(--ink-soft)] mt-1 max-w-[200px]">
+                      Click the profile icon to toggle visibility.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <MessageList
+                      messages={messages}
+                      currentUserId={auth.user.id}
+                      isAdmin={true}
+                      peerName={activeUser?.name || activeUser?.username || "User"}
+                      onDelete={handleDelete}
+                      onEdit={handleEdit}
+                      onReply={(message) => {
+                        if (message.deleted) {
+                          return;
+                        }
+                        setReplyTarget(message);
+                        setEditingMessage(null);
+                      }}
+                      onReact={handleReact}
+                      hasMore={hasMore}
+                      loadingMore={loadingMore}
+                      onLoadMore={handleLoadMore}
+                      firstUnreadId={firstUnreadId}
+                    />
+                    {typingPreview ? (
+                      <div className="flex items-center justify-end gap-2 mt-3 animate-fade-in">
+                        <p className="text-xs text-[var(--ink-soft)]">
+                          {typingPreview}
+                        </p>
+                        <div className="typing-indicator select-none">
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                          <span className="typing-dot" />
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
               <div className="border-t border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3">
                 <MessageInput

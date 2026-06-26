@@ -153,7 +153,14 @@ export default function MessageInput({
       )}
 
       {typingPreview ? (
-        <p className="mb-3 text-xs text-[var(--ink-soft)]">{typingPreview}</p>
+        <div className="flex items-center gap-2 mb-3 animate-fade-in">
+          <p className="text-xs text-[var(--ink-soft)]">{typingPreview}</p>
+          <div className="typing-indicator select-none">
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+          </div>
+        </div>
       ) : null}
 
       <div className="flex items-center gap-2">

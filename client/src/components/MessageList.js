@@ -137,6 +137,7 @@ export default function MessageList({
   messages = [],
   currentUserId,
   isAdmin = false,
+  peerName = "User",
   onDelete,
   onReply,
   onEdit,
@@ -273,9 +274,11 @@ export default function MessageList({
                   }`}
                 >
                   {message.replyTo ? (
-                    <div className="mb-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-1.5 text-xs text-[var(--ink-soft)]">
-                      <p className="font-semibold text-[var(--ink)]">Reply</p>
-                      <p className="mt-0.5 line-clamp-2">
+                    <div className="reply-box">
+                      <p className="reply-sender">
+                        {message.replyTo.senderId === currentUserId ? "You" : (peerName || "User")}
+                      </p>
+                      <p className="reply-text">
                         {message.replyTo.text || ""}
                       </p>
                     </div>
