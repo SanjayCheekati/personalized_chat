@@ -252,6 +252,9 @@ export default function AdminDashboard({
       setReplyTarget(null);
       setHasMore(false);
       setFirstUnreadId(null);
+      if (socketRef.current) {
+        socketRef.current.emit("join_conversation", { conversationId: null });
+      }
       return;
     }
 
