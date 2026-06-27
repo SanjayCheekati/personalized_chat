@@ -15,6 +15,17 @@ async function listConversations(req, res, conversationStore, userStore, presenc
           ? Boolean(await presenceStore.isUserOnline(otherId))
           : false;
 
+        let lastMessage = conversation.lastMessage;
+        let lastMessageAt = conversation.lastMessageAt;
+        if (conversation.clearedAt && conversation.clearedAt[adminId]) {
+          const clearTime = conversation.clearedAt[adminId];
+          const msgTime = lastMessage?.timestamp || lastMessageAt;
+          if (msgTime && msgTime <= clearTime) {
+            lastMessage = null;
+            lastMessageAt = null;
+          }
+        }
+
         return {
           id: conversation.id,
           user: user
@@ -27,10 +38,11 @@ async function listConversations(req, res, conversationStore, userStore, presenc
                 lastSeenAt: user.lastSeenAt || null
               }
             : null,
-          lastMessage: conversation.lastMessage,
-          lastMessageAt: conversation.lastMessageAt,
+          lastMessage,
+          lastMessageAt,
           unreadCount: conversation.unreadCount || 0,
           updatedAt: conversation.updatedAt || null,
+          clearedAt: conversation.clearedAt || {},
           online
         };
       })

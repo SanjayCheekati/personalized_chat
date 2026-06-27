@@ -6,14 +6,19 @@ async function listMessages(req, res, messageStore, conversationStore, env) {
     const limit = Math.min(Number(req.query.limit || 50), 200);
     const before = req.query.before || null;
 
+    let clearedAt = null;
     if (conversationStore) {
       const allowed = await conversationStore.isParticipant(roomId, req.user.id);
       if (!allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
+      const conversation = await conversationStore.getById(roomId);
+      if (conversation && conversation.clearedAt) {
+        clearedAt = conversation.clearedAt[req.user.id] || null;
+      }
     }
 
-    const messages = await messageStore.list(roomId, { limit, before });
+    const messages = await messageStore.list(roomId, { limit, before, after: clearedAt });
     res.json({ messages });
   } catch {
     res.status(500).json({ error: "message_list_failed" });
@@ -84,6 +89,15 @@ async function getConversation(req, res, conversationStore, env) {
       req.user.id,
       adminUser.id
     );
+
+    if (conversation && conversation.clearedAt && conversation.clearedAt[req.user.id]) {
+      const clearTime = conversation.clearedAt[req.user.id];
+      const msgTime = conversation.lastMessage?.timestamp || conversation.lastMessageAt;
+      if (msgTime && msgTime <= clearTime) {
+        conversation.lastMessage = null;
+        conversation.lastMessageAt = null;
+      }
+    }
 
     return res.json({
       conversation,

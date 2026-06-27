@@ -21,7 +21,8 @@ function mapDoc(doc) {
     lastMessage: doc.lastMessage || null,
     lastMessageAt: doc.lastMessageAt ? doc.lastMessageAt.toISOString?.() || doc.lastMessageAt : null,
     lastMessageId: doc.lastMessageId || null,
-    unreadBy: doc.unreadBy || {}
+    unreadBy: doc.unreadBy || {},
+    clearedAt: doc.clearedAt || {}
   };
 }
 
@@ -39,7 +40,8 @@ function normalizeConversation(conversation) {
     lastMessage: conversation.lastMessage || null,
     lastMessageAt: conversation.lastMessageAt || null,
     lastMessageId: conversation.lastMessageId || null,
-    unreadBy: conversation.unreadBy || {}
+    unreadBy: conversation.unreadBy || {},
+    clearedAt: conversation.clearedAt || {}
   };
 }
 
@@ -323,6 +325,39 @@ async function countConversations() {
   return state.conversationsById.size;
 }
 
+async function clearHistory(conversationId, clearedAt) {
+  if (conversationsCollection) {
+    await conversationsCollection.updateOne(
+      { id: conversationId },
+      { $set: { clearedAt } }
+    );
+    return;
+  }
+
+  const conversation = state.conversationsById.get(conversationId);
+  if (conversation) {
+    conversation.clearedAt = { ...clearedAt };
+  }
+}
+
+async function clearHistoryForUser(conversationId, userId, timestamp) {
+  if (conversationsCollection) {
+    await conversationsCollection.updateOne(
+      { id: conversationId },
+      { $set: { [`clearedAt.${userId}`]: timestamp } }
+    );
+    return;
+  }
+
+  const conversation = state.conversationsById.get(conversationId);
+  if (conversation) {
+    if (!conversation.clearedAt) {
+      conversation.clearedAt = {};
+    }
+    conversation.clearedAt[userId] = timestamp;
+  }
+}
+
 const conversationStore = {
   createOrFindDirect,
   getById,
@@ -335,7 +370,9 @@ const conversationStore = {
   updateLastMessageText,
   incrementUnread,
   resetUnread,
-  countConversations
+  countConversations,
+  clearHistory,
+  clearHistoryForUser
 };
 
 module.exports = { initConversationStore, conversationStore };

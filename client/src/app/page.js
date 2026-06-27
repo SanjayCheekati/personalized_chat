@@ -291,6 +291,12 @@ export default function Home() {
       setMessages((prev) => markMessageDeleted(prev, payload.messageId, payload.deletedBy));
     });
 
+    socket.on("history_cleared", (payload) => {
+      if (payload?.clearedAt && payload.clearedAt[auth.user.id]) {
+        setMessages([]);
+      }
+    });
+
     socket.on("message_edited", (payload) => {
       if (!payload?.message) {
         return;
@@ -572,6 +578,22 @@ export default function Home() {
     socketRef.current.emit("delete_message", { messageId: message.id }, (ack) => {
       if (!ack?.ok) {
         setStatus((prev) => ({ ...prev, error: "delete_failed" }));
+      }
+    });
+  };
+
+  const handleClearHistory = () => {
+    if (!auth || !socketRef.current || !auth.roomId) {
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to delete your chat history? This cannot be undone.")) {
+      return;
+    }
+
+    socketRef.current.emit("clear_history", {}, (ack) => {
+      if (!ack?.ok) {
+        alert("Failed to delete chat history.");
       }
     });
   };
@@ -867,7 +889,12 @@ export default function Home() {
                 <HeartIcon className={toggleOn ? "text-[#ef4b5f]" : "text-black"} />
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-[var(--ink)]">{peer.name}</p>
+                <p
+                  className="truncate text-sm font-semibold text-[var(--ink)] cursor-pointer hover:underline"
+                  onClick={handleClearHistory}
+                >
+                  {peer.name}
+                </p>
                 <p className="text-xs text-[var(--ink-soft)]">{headerStatus}</p>
               </div>
             </div>

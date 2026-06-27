@@ -357,6 +357,66 @@ function initSocket(
       }
     });
 
+    socket.on("clear_history", async (payload, ack) => {
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) {
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "missing_room" });
+        }
+        return;
+      }
+
+      try {
+        const now = new Date().toISOString();
+        if (isAdmin) {
+          // Admin clears for both regular user and admin
+          const participants = conversationStore 
+            ? await conversationStore.getParticipants(activeRoomId)
+            : [];
+          
+          const clearedAt = {};
+          if (participants && participants.length > 0) {
+            participants.forEach(pId => {
+              clearedAt[pId] = now;
+            });
+          } else {
+            clearedAt[user.id] = now;
+          }
+          
+          if (conversationStore) {
+            await conversationStore.clearHistory(activeRoomId, clearedAt);
+          }
+          
+          // Broadcast to all participants in the room
+          io.to(activeRoomId).emit("history_cleared", { clearedAt, clearedBy: user.id });
+          if (conversationStore) {
+            await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
+          }
+        } else {
+          // Regular user clears only for themselves
+          if (conversationStore) {
+            await conversationStore.clearHistoryForUser(activeRoomId, user.id, now);
+          }
+          
+          // Broadcast history_cleared to room
+          const clearedAt = { [user.id]: now };
+          io.to(activeRoomId).emit("history_cleared", { clearedAt, clearedBy: user.id });
+          if (conversationStore) {
+            await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
+          }
+        }
+
+        if (typeof ack === "function") {
+          ack({ ok: true });
+        }
+      } catch (err) {
+        console.error("clear_history error:", err);
+        if (typeof ack === "function") {
+          ack({ ok: false, error: "clear_history_failed" });
+        }
+      }
+    });
+
     socket.on("disconnect", async () => {
       const result = await presenceStore.unregister(socket.id);
       if (result?.noSocketsLeft) {
@@ -532,7 +592,8 @@ async function emitAdminConversationUpdate(io, conversationStore, conversationId
     lastMessage: conversation.lastMessage,
     lastMessageAt: conversation.lastMessageAt,
     unreadBy: conversation.unreadBy || {},
-    updatedAt: conversation.updatedAt
+    updatedAt: conversation.updatedAt,
+    clearedAt: conversation.clearedAt || {}
   });
 }
 

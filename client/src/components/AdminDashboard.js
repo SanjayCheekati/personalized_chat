@@ -137,6 +137,12 @@ export default function AdminDashboard({
       setMessages((prev) => markMessageDeleted(prev, payload.messageId, payload.deletedBy));
     });
 
+    socket.on("history_cleared", (payload) => {
+      if (payload?.clearedAt && payload.clearedAt[auth.user.id]) {
+        setMessages([]);
+      }
+    });
+
     socket.on("message_edited", (payload) => {
       if (!payload?.message) {
         return;
@@ -168,12 +174,24 @@ export default function AdminDashboard({
         }
 
         const unreadCount = payload.unreadBy ? payload.unreadBy[auth.user.id] || 0 : 0;
+        
+        let lastMessage = payload.lastMessage || prev[index].lastMessage;
+        let lastMessageAt = payload.lastMessageAt || prev[index].lastMessageAt;
+        const clearedAt = payload.clearedAt || {};
+        const clearTime = clearedAt[auth.user.id];
+        const msgTime = lastMessage?.timestamp || lastMessageAt;
+        if (clearTime && msgTime && msgTime <= clearTime) {
+          lastMessage = null;
+          lastMessageAt = null;
+        }
+
         const updated = {
           ...prev[index],
-          lastMessage: payload.lastMessage || prev[index].lastMessage,
-          lastMessageAt: payload.lastMessageAt || prev[index].lastMessageAt,
+          lastMessage,
+          lastMessageAt,
           unreadCount,
-          updatedAt: payload.updatedAt || prev[index].updatedAt
+          updatedAt: payload.updatedAt || prev[index].updatedAt,
+          clearedAt: payload.clearedAt || prev[index].clearedAt || {}
         };
         const next = [...prev];
         next[index] = updated;
@@ -429,6 +447,22 @@ export default function AdminDashboard({
     });
   };
 
+  const handleClearHistory = () => {
+    if (!auth || !socketRef.current || !activeConversationId) {
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to delete this chat history for both of you? This cannot be undone.")) {
+      return;
+    }
+
+    socketRef.current.emit("clear_history", {}, (ack) => {
+      if (!ack?.ok) {
+        alert("Failed to delete chat history.");
+      }
+    });
+  };
+
   const handleTyping = (hasText) => {
     const socket = socketRef.current;
     if (!socket) {
@@ -609,7 +643,12 @@ export default function AdminDashboard({
                 </button>
               )}
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                <p
+                  className={`truncate text-sm font-semibold text-[var(--ink)] ${
+                    activeConversationId && !adminPanelOpen ? "cursor-pointer hover:underline" : ""
+                  }`}
+                  onClick={activeConversationId && !adminPanelOpen ? handleClearHistory : undefined}
+                >
                   {headerTitle}
                 </p>
                 <p className="truncate text-xs text-[var(--ink-soft)]">{headerStatus}</p>

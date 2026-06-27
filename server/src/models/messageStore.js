@@ -34,13 +34,17 @@ function createMessageStore({ db, cache } = {}) {
   });
 
   const list = async (roomId, options = {}) => {
-    const { limit = 50, before } = options;
+    const { limit = 50, before, after } = options;
 
     if (!collection) {
       const messages = getRoom(roomId);
-      const filtered = before
+      let filtered = before
         ? messages.filter((message) => message.timestamp < before)
         : messages;
+
+      if (after) {
+        filtered = filtered.filter((message) => message.timestamp > after);
+      }
 
       return filtered.slice(Math.max(filtered.length - limit, 0));
     }
@@ -48,15 +52,31 @@ function createMessageStore({ db, cache } = {}) {
     if (cache && !before) {
       const cached = await cache.getJSON(`messages:${roomId}`);
       if (Array.isArray(cached)) {
-        return cached.slice(Math.max(cached.length - limit, 0));
+        let filteredCached = cached;
+        if (after) {
+          filteredCached = filteredCached.filter((message) => message.timestamp > after);
+        }
+        return filteredCached.slice(Math.max(filteredCached.length - limit, 0));
       }
     }
 
     const query = { roomId };
-    if (before) {
-      const beforeDate = new Date(before);
-      if (!Number.isNaN(beforeDate.getTime())) {
-        query.createdAt = { $lt: beforeDate };
+    if (before || after) {
+      query.createdAt = {};
+      if (before) {
+        const beforeDate = new Date(before);
+        if (!Number.isNaN(beforeDate.getTime())) {
+          query.createdAt.$lt = beforeDate;
+        }
+      }
+      if (after) {
+        const afterDate = new Date(after);
+        if (!Number.isNaN(afterDate.getTime())) {
+          query.createdAt.$gt = afterDate;
+        }
+      }
+      if (Object.keys(query.createdAt).length === 0) {
+        delete query.createdAt;
       }
     }
 
@@ -66,11 +86,15 @@ function createMessageStore({ db, cache } = {}) {
       .limit(limit)
       .toArray();
 
-    const messages = docs.map(mapDoc).reverse();
+    let messages = docs.map(mapDoc).reverse();
 
     if (cache && !before) {
       const trimmed = messages.slice(Math.max(messages.length - MESSAGE_CACHE_LIMIT, 0));
       await cache.setJSON(`messages:${roomId}`, trimmed, MESSAGE_CACHE_TTL);
+    }
+
+    if (after) {
+      messages = messages.filter((message) => message.timestamp > after);
     }
 
     return messages;
