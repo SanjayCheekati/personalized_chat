@@ -121,7 +121,8 @@ async function resetUserPassword(req, res, userStore) {
   }
 }
 
-async function deleteUser(req, res, userStore) {
+async function deleteUser(req, res, stores) {
+  const { userStore, conversationStore, messageStore, resetRequestStore } = stores;
   const userId = req.params.id;
 
   try {
@@ -133,9 +134,34 @@ async function deleteUser(req, res, userStore) {
       return res.status(400).json({ error: "admin_delete_forbidden" });
     }
 
+    // 1. Get user conversations to find the room IDs
+    let roomIds = [];
+    if (conversationStore) {
+      const conversations = await conversationStore.listForUser(userId);
+      roomIds = conversations.map((c) => c.id);
+    }
+
+    // 2. Delete user messages
+    if (messageStore && roomIds.length > 0) {
+      await messageStore.deleteByRoomIds(roomIds);
+    }
+
+    // 3. Delete user conversations
+    if (conversationStore) {
+      await conversationStore.deleteByParticipant(userId);
+    }
+
+    // 4. Delete reset requests
+    if (resetRequestStore) {
+      await resetRequestStore.deleteByUserId(userId);
+    }
+
+    // 5. Delete user from userStore permanently
     await userStore.deleteUser(userId);
+
     return res.json({ ok: true });
-  } catch {
+  } catch (err) {
+    console.error("Delete user controller error:", err);
     return res.status(500).json({ error: "user_delete_failed" });
   }
 }

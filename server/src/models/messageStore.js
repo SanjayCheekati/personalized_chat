@@ -380,6 +380,26 @@ function createMessageStore({ db, cache } = {}) {
     return { messageId, emoji, userId };
   };
 
+  const deleteByRoomIds = async (roomIds) => {
+    if (!roomIds || roomIds.length === 0) {
+      return;
+    }
+
+    if (collection) {
+      await collection.deleteMany({ roomId: { $in: roomIds } });
+    } else {
+      for (const roomId of roomIds) {
+        rooms.delete(roomId);
+      }
+    }
+
+    if (cache) {
+      for (const roomId of roomIds) {
+        await cache.del(`messages:${roomId}`);
+      }
+    }
+  };
+
   return {
     list,
     save,
@@ -388,7 +408,8 @@ function createMessageStore({ db, cache } = {}) {
     markDeleted,
     addReaction,
     removeReaction,
-    count
+    count,
+    deleteByRoomIds
   };
 }
 

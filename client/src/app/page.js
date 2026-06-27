@@ -36,6 +36,7 @@ export default function Home() {
   const [auth, setAuth] = useState(null);
   const [messages, setMessages] = useState([]);
   const [peer, setPeer] = useState(DEFAULT_PEER);
+  const [chatOpen, setChatOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
@@ -248,11 +249,11 @@ export default function Home() {
   }, [auth]);
 
   useEffect(() => {
-    if (!auth || !auth.roomId) {
+    if (!auth) {
       return;
     }
 
-    const socket = createSocket({ token: auth.token, roomId: auth.roomId });
+    const socket = createSocket({ token: auth.token });
     socketRef.current = socket;
     setStatus((prev) => ({ ...prev, connecting: true, error: "" }));
     socket.connect();
@@ -350,7 +351,19 @@ export default function Home() {
   }, [auth]);
 
   useEffect(() => {
-    if (!auth || !socketRef.current) {
+    if (!socketRef.current || !auth?.roomId) {
+      return;
+    }
+
+    if (chatOpen) {
+      socketRef.current.emit("join_conversation", { conversationId: auth.roomId });
+    } else {
+      socketRef.current.emit("join_conversation", { conversationId: null });
+    }
+  }, [chatOpen, auth]);
+
+  useEffect(() => {
+    if (!auth || !socketRef.current || !chatOpen) {
       return;
     }
 
@@ -366,7 +379,7 @@ export default function Home() {
     const seenAt = new Date().toISOString();
     socketRef.current.emit("seen_message", { messageIds: unseen, seenAt });
     setMessages((prev) => markMessagesSeen(prev, unseen, seenAt));
-  }, [messages, auth]);
+  }, [messages, auth, chatOpen]);
 
   useEffect(() => {
     if (auth && !isAdmin) {
@@ -467,6 +480,7 @@ export default function Home() {
     setEditingMessage(null);
     setStatus({ connecting: false, connected: false, error: "" });
     setNotificationsEnabled(false);
+    setChatOpen(false);
   };
 
   const handleToggleNotifications = async () => {
@@ -885,12 +899,92 @@ export default function Home() {
     ? `last seen ${formatLastSeen(peer.lastSeen)}`
     : "offline";
 
+  if (!chatOpen) {
+    const preview = messages[messages.length - 1]?.deleted
+      ? ""
+      : messages[messages.length - 1]?.text || "";
+    const timestamp = messages[messages.length - 1]?.timestamp || null;
+    const unreadCount = messages.filter((m) => m.senderId !== auth.user.id && !m.seen).length;
+
+    return (
+      <div className="page-shell chat-fixed">
+        <ChatShell
+          header={
+            <div className="flex w-full flex-nowrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">Chats</p>
+                <p className="truncate text-xs text-[var(--ink-soft)]">1 conversation</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--accent-warm)] transition hover:bg-[var(--panel-border)]"
+                aria-label="Sign out"
+              >
+                <SignOutIcon />
+              </button>
+            </div>
+          }
+        >
+          <div className="px-4 py-5 flex-1 overflow-y-auto">
+            <input
+              type="text"
+              placeholder="Search chats"
+              className="mb-4 w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-xs text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+              disabled
+            />
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-3 text-left transition hover:-translate-y-0.5"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
+                  {(peer.name || "Arjun").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                    {peer.name || "Arjun"}
+                  </p>
+                  <p className="truncate text-xs text-[var(--ink-soft)]">
+                    {peer.typing ? "typing..." : preview}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1 text-[10px] text-[var(--ink-soft)]">
+                  <span>{timestamp ? formatTime(timestamp) : ""}</span>
+                  {unreadCount > 0 ? (
+                    <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] text-white">
+                      {unreadCount}
+                    </span>
+                  ) : null}
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      peer.online ? "bg-[var(--accent)]" : "bg-[var(--panel-border)]"
+                    }`}
+                  />
+                </div>
+              </button>
+            </div>
+          </div>
+        </ChatShell>
+      </div>
+    );
+  }
+
   return (
     <div className="page-shell chat-fixed">
       <ChatShell
         header={
           <div className="flex w-full flex-nowrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setChatOpen(false)}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 text-[var(--ink)] transition hover:bg-[var(--panel-border)]"
+                aria-label="Back"
+              >
+                <BackIcon />
+              </button>
               <button
                 type="button"
                 onClick={() => setToggleOn((prev) => !prev)}
@@ -1149,6 +1243,22 @@ function HeartIcon({ className }) {
   return (
     <svg viewBox="0 0 24 24" className={`h-5 w-5 fill-current transition-colors duration-200 ${className}`} aria-hidden="true">
       <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M15.7 5.3a1 1 0 0 1 0 1.4L10.4 12l5.3 5.3a1 1 0 1 1-1.4 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.4 0z" />
+    </svg>
+  );
+}
+
+function SignOutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M10 3a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-4a1 1 0 1 1 2 0v3h5V4h-5v3a1 1 0 1 1-2 0V3zm-4.7 7.3a1 1 0 0 1 1.4 0L9.4 13a1 1 0 0 1 0 1.4l-2.7 2.7a1 1 0 1 1-1.4-1.4L6.6 14H3a1 1 0 1 1 0-2h3.6l-1.3-1.3a1 1 0 0 1 0-1.4z" />
     </svg>
   );
 }

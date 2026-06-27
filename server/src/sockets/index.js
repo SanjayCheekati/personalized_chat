@@ -25,9 +25,6 @@ function initSocket(
     try {
       const user = verifySocketToken(token, env);
       const isAdmin = user?.role === "admin" || user?.isAdmin;
-      if (!roomId && !isAdmin) {
-        return next(new Error("missing_room"));
-      }
       socket.data.user = user;
       socket.data.roomId = roomId || null;
       socket.data.isAdmin = isAdmin;
@@ -39,6 +36,8 @@ function initSocket(
 
   io.on("connection", async (socket) => {
     const { user, roomId, isAdmin } = socket.data;
+
+    socket.join(user.id);
 
     await presenceStore.registerOnline(user.id, socket.id);
 
@@ -112,17 +111,22 @@ function initSocket(
     }
 
     socket.on("join_conversation", async (payload, ack) => {
-      if (!isAdmin) {
-        if (typeof ack === "function") {
-          ack({ ok: false, error: "forbidden" });
-        }
-        return;
-      }
-
       const conversationId = payload?.conversationId;
       if (!conversationId) {
+        if (socket.data.roomId) {
+          const previous = await presenceStore.unregister(socket.id);
+          if (previous?.noSocketsLeft) {
+            const lastSeen = new Date().toISOString();
+            socket.to(previous.roomId).emit("user_offline", { userId: user.id, lastSeen });
+            if (userStore?.touchLastSeen) {
+              await userStore.touchLastSeen(user.id, lastSeen);
+            }
+          }
+          socket.leave(socket.data.roomId);
+          socket.data.roomId = null;
+        }
         if (typeof ack === "function") {
-          ack({ ok: false, error: "missing_conversation" });
+          ack({ ok: true });
         }
         return;
       }
@@ -243,6 +247,9 @@ function initSocket(
         }
 
         io.to(activeRoomId).emit("receive_message", message);
+        if (receiverId) {
+          io.to(receiverId).emit("receive_message", message);
+        }
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
         if (receiverId && !receiverActive) {
@@ -616,6 +623,9 @@ function initSocket(
         }
 
         io.to(activeRoomId).emit("receive_message", message);
+        if (receiverId) {
+          io.to(receiverId).emit("receive_message", message);
+        }
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
         if (receiverId && !receiverActive) {

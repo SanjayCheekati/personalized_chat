@@ -30,7 +30,7 @@ function adminRouter(env, { conversationStore, userStore, presenceStore, resetRe
   );
 
   router.delete("/admin/users/:id", requireAdmin, (req, res) =>
-    deleteUser(req, res, userStore)
+    deleteUser(req, res, { userStore, conversationStore, messageStore, resetRequestStore })
   );
 
   router.get("/admin/reset-requests", requireAdmin, (req, res) =>

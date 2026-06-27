@@ -508,13 +508,14 @@ export default function AdminDashboard({
   };
 
   const handleDeleteUser = (userId) => {
-    if (!window.confirm("Delete this user?")) {
+    if (!window.confirm("Are you sure you want to permanently delete this user and all their chat history? This cannot be undone.")) {
       return;
     }
 
     deleteUser(auth.token, userId)
       .then(() => {
         setUsers((prev) => prev.filter((user) => user.id !== userId));
+        setConversations((prev) => prev.filter((conv) => conv.user?.id !== userId));
       })
       .catch(() => {});
   };
@@ -762,6 +763,14 @@ export default function AdminDashboard({
                         aria-label="Edit password"
                       >
                         <EditIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(user.id)}
+                        className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-2 text-[var(--accent-warm)] transition hover:bg-[var(--panel-border)]"
+                        aria-label="Delete user"
+                      >
+                        <TrashIcon />
                       </button>
                     </div>
                   </div>

@@ -358,6 +358,24 @@ async function clearHistoryForUser(conversationId, userId, timestamp) {
   }
 }
 
+async function deleteByParticipant(userId) {
+  if (!userId) {
+    return;
+  }
+
+  if (conversationsCollection) {
+    await conversationsCollection.deleteMany({ participants: userId });
+    return;
+  }
+
+  for (const [id, conv] of state.conversationsById.entries()) {
+    if (conv.participants.includes(userId)) {
+      state.conversationsById.delete(id);
+      state.conversationsByKey.delete(conv.participantsKey);
+    }
+  }
+}
+
 const conversationStore = {
   createOrFindDirect,
   getById,
@@ -372,7 +390,8 @@ const conversationStore = {
   resetUnread,
   countConversations,
   clearHistory,
-  clearHistoryForUser
+  clearHistoryForUser,
+  deleteByParticipant
 };
 
 module.exports = { initConversationStore, conversationStore };

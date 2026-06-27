@@ -119,6 +119,22 @@ function createResetRequestStore({ db } = {}) {
     return normalizeRequest(updated);
   };
 
+  const deleteByUserId = async (userId) => {
+    if (!userId) {
+      return;
+    }
+
+    if (collection) {
+      await collection.deleteMany({ userId });
+    } else {
+      for (const [id, req] of requests.entries()) {
+        if (req.userId === userId) {
+          requests.delete(id);
+        }
+      }
+    }
+  };
+
   const count = async () => {
     if (collection) {
       return collection.countDocuments();
@@ -130,7 +146,8 @@ function createResetRequestStore({ db } = {}) {
     createRequest,
     listRequests,
     updateRequest,
-    count
+    count,
+    deleteByUserId
   };
 }
 

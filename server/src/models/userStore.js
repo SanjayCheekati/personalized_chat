@@ -360,23 +360,29 @@ async function deleteUser(userId) {
     return null;
   }
 
+  let deletedUserObj = null;
+
   if (usersCollection) {
-    const result = await usersCollection.findOneAndUpdate(
-      { id: userId },
-      { $set: { status: "deleted", updatedAt: new Date() } },
-      { returnDocument: "after" }
-    );
-    return result ? normalizeUser(result) : null;
+    const doc = await usersCollection.findOne({ id: userId });
+    if (doc) {
+      deletedUserObj = normalizeUser(doc);
+      await usersCollection.deleteOne({ id: userId });
+    }
+  } else {
+    const existing = state.usersById.get(userId);
+    if (existing) {
+      deletedUserObj = normalizeUser(existing);
+      state.usersById.delete(userId);
+      if (existing.username) {
+        state.usersByUsername.delete(String(existing.username).toLowerCase());
+      }
+      if (existing.email) {
+        state.usersByEmail.delete(String(existing.email).toLowerCase());
+      }
+    }
   }
 
-  const existing = state.usersById.get(userId);
-  if (!existing) {
-    return null;
-  }
-
-  const next = { ...existing, status: "deleted", updatedAt: new Date() };
-  addUser(next);
-  return normalizeUser(next);
+  return deletedUserObj;
 }
 
 async function touchLogin(userId) {
