@@ -1,15 +1,32 @@
+const activeRoomsByClient = new Map();
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "ACTIVE_ROOM_CHANGED") {
+    if (event.source && event.source.id) {
+      activeRoomsByClient.set(event.source.id, event.data.roomId);
+    }
+  }
+});
+
 self.addEventListener("push", (event) => {
   if (!event.data) {
     return;
   }
 
   try {
-    const data = event.data.json();
+    let data;
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: "New Message", body: event.data.text() };
+    }
+
     const title = data.title || "New Message";
+    const roomId = data.roomId;
     const options = {
       body: data.body || "",
       data: {
-        roomId: data.roomId,
+        roomId: roomId,
         url: data.url || "/"
       }
     };
@@ -18,7 +35,24 @@ self.addEventListener("push", (event) => {
       options.tag = data.tag;
     }
 
-    event.waitUntil(self.registration.showNotification(title, options));
+    const promise = clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      const hasActiveFocusedClientInRoom = windowClients.some((client) => {
+        const isFocused = client.focused && client.visibilityState === "visible";
+        if (!isFocused) return false;
+
+        const clientActiveRoom = activeRoomsByClient.get(client.id);
+        return clientActiveRoom === roomId || (!clientActiveRoom && roomId);
+      });
+
+      if (hasActiveFocusedClientInRoom) {
+        console.log("Suppressing notification because user is active in this room.");
+        return;
+      }
+
+      return self.registration.showNotification(title, options);
+    });
+
+    event.waitUntil(promise);
   } catch (err) {
     console.error("Error displaying push notification:", err);
   }

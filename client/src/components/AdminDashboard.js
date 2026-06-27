@@ -328,7 +328,18 @@ export default function AdminDashboard({
       .catch(() => {});
 
     if (socketRef.current) {
+      socketRef.current.auth = { ...socketRef.current.auth, roomId: activeConversationId };
       socketRef.current.emit("join_conversation", { conversationId: activeConversationId });
+    }
+
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      const controller = navigator.serviceWorker.controller;
+      if (controller) {
+        controller.postMessage({
+          type: "ACTIVE_ROOM_CHANGED",
+          roomId: activeConversationId
+        });
+      }
     }
 
     return () => {

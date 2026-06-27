@@ -73,6 +73,17 @@ export default function Home() {
   const [toggleOn, setToggleOn] = useState(true);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
+  const chatOpenRef = useRef(chatOpen);
+  const authRef = useRef(auth);
+
+  useEffect(() => {
+    chatOpenRef.current = chatOpen;
+  }, [chatOpen]);
+
+  useEffect(() => {
+    authRef.current = auth;
+  }, [auth]);
+
   const isAdmin = auth?.user?.role === "admin";
 
   useEffect(() => {
@@ -267,6 +278,9 @@ export default function Home() {
 
     socket.on("connect", () => {
       setStatus({ connecting: false, connected: true, error: "" });
+      if (chatOpenRef.current && authRef.current?.roomId) {
+        socket.emit("join_conversation", { conversationId: authRef.current.roomId });
+      }
     });
 
     socket.on("disconnect", () => {
@@ -363,9 +377,21 @@ export default function Home() {
     }
 
     if (chatOpen) {
+      socketRef.current.auth = { ...socketRef.current.auth, roomId: auth.roomId };
       socketRef.current.emit("join_conversation", { conversationId: auth.roomId });
     } else {
+      socketRef.current.auth = { ...socketRef.current.auth, roomId: null };
       socketRef.current.emit("join_conversation", { conversationId: null });
+    }
+
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      const controller = navigator.serviceWorker.controller;
+      if (controller) {
+        controller.postMessage({
+          type: "ACTIVE_ROOM_CHANGED",
+          roomId: chatOpen ? auth.roomId : null
+        });
+      }
     }
   }, [chatOpen, auth]);
 
