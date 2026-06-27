@@ -74,8 +74,8 @@ async function start() {
     res.json({ ok: true });
   });
 
-  app.use(authRouter(env, conversationStore, resetRequestStore));
-  app.use(chatRouter(env, messageStore, conversationStore));
+  app.use(authRouter(env, conversationStore, resetRequestStore, presenceStore));
+  app.use(chatRouter(env, messageStore, conversationStore, presenceStore));
   app.use(
     adminRouter(env, {
       conversationStore,

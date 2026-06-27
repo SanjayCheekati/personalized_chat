@@ -2,11 +2,11 @@ const express = require("express");
 const { listMessages, postMessage, getConversation } = require("../controllers/chatController");
 const { createAuthMiddleware } = require("../middleware/auth");
 
-function chatRouter(env, messageStore, conversationStore) {
+function chatRouter(env, messageStore, conversationStore, presenceStore) {
   const router = express.Router();
 
   router.get("/conversation", createAuthMiddleware(env), (req, res) =>
-    getConversation(req, res, conversationStore, env)
+    getConversation(req, res, conversationStore, env, presenceStore)
   );
 
   router.get("/messages", createAuthMiddleware(env), (req, res) =>
@@ -14,7 +14,7 @@ function chatRouter(env, messageStore, conversationStore) {
   );
 
   router.post("/message", createAuthMiddleware(env), (req, res) =>
-    postMessage(req, res, messageStore, conversationStore, env)
+    postMessage(req, res, messageStore, conversationStore, env, presenceStore)
   );
 
   return router;

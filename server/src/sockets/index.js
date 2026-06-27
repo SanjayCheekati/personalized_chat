@@ -69,9 +69,24 @@ function initSocket(
       await presenceStore.register(roomId, user.id, socket.id);
       socket.join(roomId);
 
-      const otherUserId = await presenceStore.getOtherUserId(roomId, user.id);
+      const otherUserId = conversationStore
+        ? await conversationStore.getOtherParticipant(roomId, user.id)
+        : await presenceStore.getOtherUserId(roomId, user.id);
+
       if (otherUserId) {
-        socket.emit("user_online", { userId: otherUserId });
+        const isOtherInRoom = await presenceStore.isUserInRoom(roomId, otherUserId);
+        if (isOtherInRoom) {
+          socket.emit("user_online", { userId: otherUserId });
+        } else {
+          let lastSeen = null;
+          if (userStore?.findById) {
+            const otherUserObj = await userStore.findById(otherUserId);
+            if (otherUserObj) {
+              lastSeen = otherUserObj.lastSeenAt;
+            }
+          }
+          socket.emit("user_offline", { userId: otherUserId, lastSeen });
+        }
       }
       socket.to(roomId).emit("user_online", { userId: user.id });
     }
@@ -107,6 +122,9 @@ function initSocket(
         if (previous?.noSocketsLeft) {
           const lastSeen = new Date().toISOString();
           socket.to(previous.roomId).emit("user_offline", { userId: user.id, lastSeen });
+          if (userStore?.touchLastSeen) {
+            await userStore.touchLastSeen(user.id, lastSeen);
+          }
         }
         socket.leave(socket.data.roomId);
       }
@@ -122,9 +140,24 @@ function initSocket(
       await presenceStore.register(conversationId, user.id, socket.id);
       socket.join(conversationId);
 
-      const otherUserId = await presenceStore.getOtherUserId(conversationId, user.id);
+      const otherUserId = conversationStore
+        ? await conversationStore.getOtherParticipant(conversationId, user.id)
+        : await presenceStore.getOtherUserId(conversationId, user.id);
+
       if (otherUserId) {
-        socket.emit("user_online", { userId: otherUserId });
+        const isOtherInRoom = await presenceStore.isUserInRoom(conversationId, otherUserId);
+        if (isOtherInRoom) {
+          socket.emit("user_online", { userId: otherUserId });
+        } else {
+          let lastSeen = null;
+          if (userStore?.findById) {
+            const otherUserObj = await userStore.findById(otherUserId);
+            if (otherUserObj) {
+              lastSeen = otherUserObj.lastSeenAt;
+            }
+          }
+          socket.emit("user_offline", { userId: otherUserId, lastSeen });
+        }
       }
       socket.to(conversationId).emit("user_online", { userId: user.id });
 
@@ -167,18 +200,24 @@ function initSocket(
               senderId: payload.replyTo.senderId || null
             }
           : null;
+        const receiverActive = receiverId
+          ? await presenceStore.isUserInRoom(activeRoomId, receiverId)
+          : false;
+
         const message = await messageStore.save({
           roomId: activeRoomId,
           senderId: user.id,
           receiverId,
           text,
           clientId: payload?.clientId || null,
-          replyTo
+          replyTo,
+          seen: receiverActive,
+          seenAt: receiverActive ? new Date().toISOString() : null
         });
 
         if (conversationStore) {
           await conversationStore.touchLastMessage(activeRoomId, message);
-          if (receiverId) {
+          if (receiverId && !receiverActive) {
             await conversationStore.incrementUnread(activeRoomId, receiverId);
           }
         }
@@ -186,15 +225,12 @@ function initSocket(
         io.to(activeRoomId).emit("receive_message", message);
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
-        if (receiverId) {
-          const receiverActive = await presenceStore.isUserInRoom(activeRoomId, receiverId);
-          if (!receiverActive) {
-            sendPushNotification(receiverId, {
-              title: user.name || user.username || "FlashChat",
-              body: text,
-              roomId: activeRoomId
-            }).catch((err) => console.error("Error sending push notification:", err));
-          }
+        if (receiverId && !receiverActive) {
+          sendPushNotification(receiverId, {
+            title: user.name || user.username || "FlashChat",
+            body: text,
+            roomId: activeRoomId
+          }).catch((err) => console.error("Error sending push notification:", err));
         }
 
         if (typeof ack === "function") {
@@ -537,24 +573,32 @@ function initSocket(
         const formattedTime = payload?.localTime || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         const text = `${senderName} Remembered you at ${formattedTime}`;
 
+        const receiverActive = receiverId
+          ? await presenceStore.isUserInRoom(activeRoomId, receiverId)
+          : false;
+
         const message = await messageStore.save({
           roomId: activeRoomId,
           senderId: user.id,
           receiverId,
           text,
           kind: "remember",
-          clientId: payload?.clientId || null
+          clientId: payload?.clientId || null,
+          seen: receiverActive,
+          seenAt: receiverActive ? new Date().toISOString() : null
         });
 
         if (conversationStore) {
           await conversationStore.touchLastMessage(activeRoomId, message);
-          await conversationStore.incrementUnread(activeRoomId, receiverId);
+          if (receiverId && !receiverActive) {
+            await conversationStore.incrementUnread(activeRoomId, receiverId);
+          }
         }
 
         io.to(activeRoomId).emit("receive_message", message);
         await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
 
-        if (receiverId) {
+        if (receiverId && !receiverActive) {
           sendPushNotification(receiverId, {
             title: senderName,
             body: text,

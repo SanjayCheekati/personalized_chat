@@ -128,7 +128,9 @@ export default function Home() {
       setPeer({
         ...DEFAULT_PEER,
         id: auth.peer.id || null,
-        name: auth.peer.name || DEFAULT_PEER.name
+        name: auth.peer.name || DEFAULT_PEER.name,
+        online: auth.peer.online ?? DEFAULT_PEER.online,
+        lastSeen: auth.peer.lastSeen ?? DEFAULT_PEER.lastSeen
       });
       return;
     }
@@ -232,6 +234,15 @@ export default function Home() {
         };
         localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
         setAuth(nextAuth);
+        if (data.peer) {
+          setPeer({
+            ...DEFAULT_PEER,
+            id: data.peer.id,
+            name: data.peer.name,
+            online: data.peer.online ?? DEFAULT_PEER.online,
+            lastSeen: data.peer.lastSeen ?? DEFAULT_PEER.lastSeen
+          });
+        }
       })
       .catch(() => {});
   }, [auth]);

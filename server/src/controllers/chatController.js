@@ -25,7 +25,7 @@ async function listMessages(req, res, messageStore, conversationStore, env) {
   }
 }
 
-async function postMessage(req, res, messageStore, conversationStore, env) {
+async function postMessage(req, res, messageStore, conversationStore, env, presenceStore) {
   try {
     const roomId = req.body.conversationId || req.body.roomId || env.DEFAULT_ROOM_ID;
     const text = String(req.body.text || "").trim();
@@ -49,17 +49,23 @@ async function postMessage(req, res, messageStore, conversationStore, env) {
       return res.status(404).json({ error: "receiver_missing" });
     }
 
+    const receiverActive = receiverId && presenceStore
+      ? await presenceStore.isUserInRoom(roomId, receiverId)
+      : false;
+
     const message = await messageStore.save({
       roomId,
       senderId: req.user.id,
       receiverId,
       text,
-      clientId: req.body.clientId || null
+      clientId: req.body.clientId || null,
+      seen: receiverActive,
+      seenAt: receiverActive ? new Date().toISOString() : null
     });
 
     if (conversationStore) {
       await conversationStore.touchLastMessage(roomId, message);
-      if (receiverId) {
+      if (receiverId && !receiverActive) {
         await conversationStore.incrementUnread(roomId, receiverId);
       }
     }
@@ -70,7 +76,7 @@ async function postMessage(req, res, messageStore, conversationStore, env) {
   }
 }
 
-async function getConversation(req, res, conversationStore, env) {
+async function getConversation(req, res, conversationStore, env, presenceStore) {
   if (!conversationStore) {
     return res.status(400).json({ error: "conversation_unavailable" });
   }
@@ -99,12 +105,18 @@ async function getConversation(req, res, conversationStore, env) {
       }
     }
 
+    const adminOnlineInRoom = presenceStore && conversation
+      ? await presenceStore.isUserInRoom(conversation.id, adminUser.id)
+      : false;
+
     return res.json({
       conversation,
       peer: {
         id: adminUser.id,
         name: adminUser.name,
-        username: adminUser.username
+        username: adminUser.username,
+        online: adminOnlineInRoom,
+        lastSeen: adminOnlineInRoom ? null : (adminUser.lastSeenAt || null)
       }
     });
   } catch {

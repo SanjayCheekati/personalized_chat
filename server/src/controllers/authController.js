@@ -32,7 +32,7 @@ function sanitizeUser(user) {
   };
 }
 
-async function login(req, res, env, conversationStore) {
+async function login(req, res, env, conversationStore, presenceStore) {
   const { username, password } = req.body || {};
   const normalizedUsername = String(username || "").trim().toLowerCase();
 
@@ -65,7 +65,15 @@ async function login(req, res, env, conversationStore) {
     if (adminUser) {
       const conversation = await conversationStore.createOrFindDirect(user.id, adminUser.id);
       roomId = conversation ? conversation.id : null;
-      peer = sanitizeUser(adminUser);
+      const adminOnlineInRoom = presenceStore && conversation
+        ? await presenceStore.isUserInRoom(conversation.id, adminUser.id)
+        : false;
+      const sanitizedAdmin = sanitizeUser(adminUser);
+      peer = {
+        ...sanitizedAdmin,
+        online: adminOnlineInRoom,
+        lastSeen: adminOnlineInRoom ? null : (sanitizedAdmin.lastSeenAt || null)
+      };
     }
   }
 
@@ -84,7 +92,7 @@ async function login(req, res, env, conversationStore) {
   });
 }
 
-async function signup(req, res, env, conversationStore) {
+async function signup(req, res, env, conversationStore, presenceStore) {
   const { username, password } = req.body || {};
   const normalizedUsername = String(username || "").trim().toLowerCase();
 
@@ -117,7 +125,15 @@ async function signup(req, res, env, conversationStore) {
       adminUser.id
     );
     roomId = conversation ? conversation.id : null;
-    peer = sanitizeUser(adminUser);
+    const adminOnlineInRoom = presenceStore && conversation
+      ? await presenceStore.isUserInRoom(conversation.id, adminUser.id)
+      : false;
+    const sanitizedAdmin = sanitizeUser(adminUser);
+    peer = {
+      ...sanitizedAdmin,
+      online: adminOnlineInRoom,
+      lastSeen: adminOnlineInRoom ? null : (sanitizedAdmin.lastSeenAt || null)
+    };
   }
 
   return res.json({

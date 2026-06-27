@@ -109,6 +109,12 @@ function createMessageStore({ db, cache } = {}) {
           senderId: input.replyTo.senderId || null
         }
       : null;
+
+    const seen = input.seen !== undefined ? Boolean(input.seen) : false;
+    const seenAt = input.seenAt
+      ? (input.seenAt instanceof Date ? input.seenAt : new Date(input.seenAt))
+      : null;
+
     const message = {
       id: nanoid(12),
       roomId: input.roomId,
@@ -120,8 +126,8 @@ function createMessageStore({ db, cache } = {}) {
       clientId: input.clientId || null,
       timestamp: now.toISOString(),
       createdAt: now,
-      seen: false,
-      seenAt: null,
+      seen,
+      seenAt: seenAt ? seenAt.toISOString() : null,
       edited: false,
       editedAt: null,
       deleted: false,
@@ -129,7 +135,11 @@ function createMessageStore({ db, cache } = {}) {
     };
 
     if (collection) {
-      await collection.insertOne({ ...message });
+      const dbMessage = { ...message };
+      if (seenAt) {
+        dbMessage.seenAt = seenAt;
+      }
+      await collection.insertOne(dbMessage);
     } else {
       const messages = getRoom(input.roomId);
       messages.push(message);
