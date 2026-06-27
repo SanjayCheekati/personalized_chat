@@ -13,6 +13,19 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 export async function registerServiceWorker() {
   if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
     return null;
@@ -30,9 +43,20 @@ export async function subscribeUser(token) {
     throw new Error("Notification permission not granted.");
   }
 
-  const registration = await registerServiceWorker();
+  await registerServiceWorker();
+  const registration = await navigator.serviceWorker.ready;
   if (!registration) {
     throw new Error("Service worker registration failed.");
+  }
+
+  // Clear existing subscription first to handle VAPID key transitions cleanly
+  try {
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      await existingSubscription.unsubscribe();
+    }
+  } catch (error) {
+    console.warn("Failed to clear existing subscription before subscribing:", error);
   }
 
   const keyResponse = await fetch(`${API_BASE}/push/vapid-key`);
@@ -100,3 +124,73 @@ export async function checkSubscriptionState() {
   const subscription = await registration.pushManager.getSubscription();
   return !!subscription && Notification.permission === "granted";
 }
+
+export async function syncSubscription(token) {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return false;
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  if (!registration) {
+    return false;
+  }
+
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    return false;
+  }
+
+  let publicKey;
+  try {
+    const keyResponse = await fetch(`${API_BASE}/push/vapid-key`);
+    const data = await keyResponse.json();
+    publicKey = data.publicKey;
+  } catch (error) {
+    console.error("Failed to fetch VAPID key for sync:", error);
+    return false;
+  }
+
+  if (!publicKey) {
+    return false;
+  }
+
+  let keysMatch = false;
+  if (subscription.options && subscription.options.applicationServerKey) {
+    const subKeyBase64 = arrayBufferToBase64(subscription.options.applicationServerKey);
+    const cleanSubKey = subKeyBase64.replace(/=+$/, "");
+    const cleanServerKey = publicKey.replace(/=+$/, "");
+    keysMatch = cleanSubKey === cleanServerKey;
+  }
+
+  if (!keysMatch) {
+    console.log("VAPID key mismatch or missing. Re-subscribing user...");
+    try {
+      await subscription.unsubscribe();
+    } catch (error) {
+      console.warn("Unsubscribe failed during sync mismatch:", error);
+    }
+    try {
+      await subscribeUser(token);
+      return true;
+    } catch (error) {
+      console.error("Re-subscription failed during sync:", error);
+      return false;
+    }
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/push/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ subscription })
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Failed to send synced subscription to server:", error);
+    return false;
+  }
+}
+

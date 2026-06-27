@@ -19,7 +19,8 @@ import {
   checkSubscriptionState,
   subscribeUser,
   unsubscribeUser,
-  registerServiceWorker
+  registerServiceWorker,
+  syncSubscription
 } from "../utils/pushSubscription";
 
 const AUTH_KEY = "flashchat.auth";
@@ -93,9 +94,15 @@ export default function Home() {
     }
     registerServiceWorker().catch((err) => console.error("SW registration error:", err));
 
-    checkSubscriptionState().then((subscribed) => {
-      setNotificationsEnabled(subscribed);
-      if (!subscribed) {
+    checkSubscriptionState().then(async (subscribed) => {
+      if (subscribed) {
+        const synced = await syncSubscription(auth.token);
+        setNotificationsEnabled(synced);
+        if (!synced) {
+          promptNotifications(auth.token);
+        }
+      } else {
+        setNotificationsEnabled(false);
         promptNotifications(auth.token);
       }
     });
@@ -424,8 +431,15 @@ export default function Home() {
       localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
-      checkSubscriptionState().then((enabled) => {
-        if (!enabled) {
+      checkSubscriptionState().then(async (enabled) => {
+        if (enabled) {
+          const synced = await syncSubscription(data.token);
+          setNotificationsEnabled(synced);
+          if (!synced) {
+            promptNotifications(data.token);
+          }
+        } else {
+          setNotificationsEnabled(false);
           promptNotifications(data.token);
         }
       });
@@ -457,8 +471,15 @@ export default function Home() {
       setAuth(nextAuth);
       setPeer(DEFAULT_PEER);
       setSignupForm({ username: "", password: "", confirmPassword: "" });
-      checkSubscriptionState().then((enabled) => {
-        if (!enabled) {
+      checkSubscriptionState().then(async (enabled) => {
+        if (enabled) {
+          const synced = await syncSubscription(data.token);
+          setNotificationsEnabled(synced);
+          if (!synced) {
+            promptNotifications(data.token);
+          }
+        } else {
+          setNotificationsEnabled(false);
           promptNotifications(data.token);
         }
       });
