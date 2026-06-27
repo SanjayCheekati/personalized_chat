@@ -108,6 +108,11 @@ function createMemoryPresenceStore() {
     return users ? users.has(userId) : false;
   };
 
+  const getUserSockets = (userId) => {
+    const sockets = onlineUsers.get(userId);
+    return sockets ? Array.from(sockets) : [];
+  };
+
   return {
     canJoin,
     register,
@@ -118,7 +123,8 @@ function createMemoryPresenceStore() {
     unregisterOnline,
     isUserOnline,
     listOnlineUserIds,
-    isUserInRoom
+    isUserInRoom,
+    getUserSockets
   };
 }
 
@@ -136,7 +142,8 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
       unregisterOnline: async (socketId) => memory.unregisterOnline(socketId),
       isUserOnline: async (userId) => memory.isUserOnline(userId),
       listOnlineUserIds: async () => memory.listOnlineUserIds(),
-      isUserInRoom: async (roomId, userId) => memory.isUserInRoom(roomId, userId)
+      isUserInRoom: async (roomId, userId) => memory.isUserInRoom(roomId, userId),
+      getUserSockets: async (userId) => memory.getUserSockets(userId)
     };
   }
 
@@ -231,6 +238,10 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
     return redisClient.sIsMember(roomKey(roomId), userId);
   };
 
+  const getUserSockets = async (userId) => {
+    return redisClient.sMembers(onlineUserKey(userId));
+  };
+
   return {
     canJoin,
     register,
@@ -241,7 +252,8 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
     unregisterOnline,
     isUserOnline,
     listOnlineUserIds,
-    isUserInRoom
+    isUserInRoom,
+    getUserSockets
   };
 }
 

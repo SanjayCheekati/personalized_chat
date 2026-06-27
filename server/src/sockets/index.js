@@ -11,7 +11,9 @@ function initSocket(
   const io = new Server(server, {
     cors: {
       origin: corsOrigin || env.CLIENT_ORIGIN
-    }
+    },
+    pingInterval: 5000,
+    pingTimeout: 5000
   });
 
   io.use((socket, next) => {
@@ -48,6 +50,24 @@ function initSocket(
 
     if (isAdmin) {
       socket.join(ADMIN_ROOM);
+
+      if (!roomId) {
+        if (presenceStore?.getUserSockets) {
+          const userSockets = await presenceStore.getUserSockets(user.id);
+          for (const otherSocketId of userSockets) {
+            if (otherSocketId !== socket.id) {
+              const prevRoom = await presenceStore.unregister(otherSocketId);
+              if (prevRoom?.noSocketsLeft) {
+                const lastSeen = new Date().toISOString();
+                io.to(prevRoom.roomId).emit("user_offline", { userId: user.id, lastSeen });
+                if (userStore?.touchLastSeen) {
+                  await userStore.touchLastSeen(user.id, lastSeen);
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     if (roomId) {
