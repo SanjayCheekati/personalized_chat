@@ -27,18 +27,26 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const roomUrl = event.notification.data?.url || "/";
+  const relativeUrl = event.notification.data?.url || "/";
+  const absoluteUrl = new URL(relativeUrl, self.location.origin).toString();
+  const roomId = event.notification.data?.roomId;
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
         if ("focus" in client) {
+          if (roomId) {
+            client.postMessage({
+              type: "NAVIGATE_TO_ROOM",
+              roomId: roomId
+            });
+          }
           return client.focus();
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow(roomUrl);
+        return clients.openWindow(absoluteUrl);
       }
     })
   );

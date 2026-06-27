@@ -34,7 +34,7 @@ async function sendPushNotification(receiverId, { title, body, roomId }) {
     title,
     body,
     roomId,
-    url: `/`
+    url: roomId ? `/?roomId=${roomId}` : `/`
   });
 
   const promises = receiver.pushSubscriptions.map((sub) =>

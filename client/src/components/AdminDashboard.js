@@ -69,6 +69,37 @@ export default function AdminDashboard({
     activeConversationRef.current = activeConversationId;
   }, [activeConversationId]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const rId = params.get("roomId");
+      if (rId) {
+        setActiveConversationId(rId);
+        const url = new URL(window.location);
+        url.searchParams.delete("roomId");
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+    const handleMessage = (event) => {
+      if (event.data && event.data.type === "NAVIGATE_TO_ROOM") {
+        const targetRoomId = event.data.roomId;
+        if (targetRoomId) {
+          setActiveConversationId(targetRoomId);
+        }
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
   const refreshConversations = () => {
     fetchAdminConversations(auth.token)
       .then((data) => {
@@ -669,16 +700,14 @@ export default function AdminDashboard({
                   {rememberCooldown ? "💕" : "Remember"}
                 </button>
               ) : null}
-              {!notificationsEnabled ? (
-                <button
-                  type="button"
-                  onClick={onToggleNotifications}
-                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
-                  aria-label="Toggle notifications"
-                >
-                  <BellIcon enabled={notificationsEnabled} />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={onToggleNotifications}
+                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                aria-label="Toggle notifications"
+              >
+                <BellIcon enabled={notificationsEnabled} />
+              </button>
               <button
                 type="button"
                 onClick={onLogout}

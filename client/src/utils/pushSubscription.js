@@ -92,7 +92,7 @@ export async function checkSubscriptionState() {
     return false;
   }
 
-  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  const registration = await navigator.serviceWorker.getRegistration();
   if (!registration) {
     return false;
   }
