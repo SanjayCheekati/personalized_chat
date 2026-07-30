@@ -6,7 +6,9 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" }
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" }
   ]
 };
 
@@ -69,6 +71,16 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   const timerRef = useRef(null);
   const pendingCandidates = useRef([]);
   const incomingSignalRef = useRef(null);
+  const callStateRef = useRef(callState);
+  const activeRoomIdRef = useRef(activeRoomId);
+
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  useEffect(() => {
+    activeRoomIdRef.current = activeRoomId;
+  }, [activeRoomId]);
 
   // Cleanup helper
   const endCallCleanly = useCallback(() => {
@@ -119,7 +131,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     pc.onicecandidate = (event) => {
       if (event.candidate && socket) {
         socket.emit("webrtc_signal", {
-          roomId: activeRoomId,
+          roomId: activeRoomIdRef.current,
           signal: { type: "candidate", candidate: event.candidate }
         });
       }
@@ -132,20 +144,35 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       }
     };
 
+    pc.onconnectionstatechange = () => {
+      if (
+        pc.connectionState === "failed" ||
+        pc.connectionState === "disconnected" ||
+        pc.connectionState === "closed"
+      ) {
+        endCallCleanly();
+      }
+    };
+
     pcRef.current = pc;
     return pc;
-  }, [socket, activeRoomId]);
+  }, [socket, endCallCleanly]);
 
   // Initiate a Call (Caller side)
   const initiateCall = useCallback(async () => {
-    if (!socket || !activeRoomId) {
-      alert("Please open a conversation to call.");
+    if (!socket || !activeRoomIdRef.current) {
+      alert("Please select or open a conversation first to make a call.");
       return;
     }
 
     try {
       setCallState("calling");
       onCallStateChange?.("calling");
+
+      // Pre-unlock audio element playback permissions
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.play().catch(() => {});
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
@@ -157,7 +184,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       await pc.setLocalDescription(offer);
 
       socket.emit("call_user", {
-        roomId: activeRoomId,
+        roomId: activeRoomIdRef.current,
         signal: { type: "offer", sdp: offer.sdp }
       });
     } catch (err) {
@@ -165,7 +192,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       alert("Could not access microphone.");
       endCallCleanly();
     }
-  }, [socket, activeRoomId, createPeerConnection, endCallCleanly, onCallStateChange]);
+  }, [socket, createPeerConnection, endCallCleanly, onCallStateChange]);
 
   // Accept Incoming Call (Receiver side)
   const acceptCall = async () => {
@@ -175,6 +202,11 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       setCallState("connected");
       onCallStateChange?.("connected");
       startTimer();
+
+      // Unlock audio element playback
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.play().catch(() => {});
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
@@ -196,26 +228,26 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       await pc.setLocalDescription(answer);
 
       socket.emit("accept_call", {
-        roomId: activeRoomId,
+        roomId: activeRoomIdRef.current,
         signal: { type: "answer", sdp: answer.sdp }
       });
     } catch (err) {
       console.error("Failed to accept call:", err);
       alert("Could not accept call.");
-      socket.emit("reject_call", { roomId: activeRoomId });
+      socket.emit("reject_call", { roomId: activeRoomIdRef.current });
       endCallCleanly();
     }
   };
 
   // Decline/Reject Incoming Call
   const rejectCall = () => {
-    socket?.emit("reject_call", { roomId: activeRoomId });
+    socket?.emit("reject_call", { roomId: activeRoomIdRef.current });
     endCallCleanly();
   };
 
   // Hangup Active Call
   const terminateCall = () => {
-    socket?.emit("end_call", { roomId: activeRoomId });
+    socket?.emit("end_call", { roomId: activeRoomIdRef.current });
     endCallCleanly();
   };
 
@@ -247,6 +279,12 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     if (!socket) return;
 
     const handleIncomingCall = (data) => {
+      // If user is already on a call, auto-reject with busy status
+      if (callStateRef.current !== "idle") {
+        socket.emit("reject_call", { roomId: data.roomId, busy: true });
+        return;
+      }
+
       incomingSignalRef.current = data.signal;
       setCallerName(data.callerName || peerName || "Someone");
       setCallState("incoming");
@@ -270,8 +308,12 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       }
     };
 
-    const handleCallRejected = () => {
-      alert("Call declined.");
+    const handleCallRejected = (data) => {
+      if (data?.busy) {
+        alert("User is currently on another call.");
+      } else {
+        alert("Call declined.");
+      }
       endCallCleanly();
     };
 
