@@ -205,6 +205,8 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
         setIsMuted(!audioTrack.enabled);
       }
     }
+  };
+
   // Ringtone sound effect
   useEffect(() => {
     if (callState === "incoming") {
