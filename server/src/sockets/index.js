@@ -623,6 +623,13 @@ function initSocket(
       return null;
     };
 
+    const getCallRooms = (activeRoomId, targetId) => {
+      const rooms = [];
+      if (activeRoomId) rooms.push(activeRoomId);
+      if (targetId && targetId !== activeRoomId) rooms.push(targetId);
+      return rooms;
+    };
+
     socket.on("voice_call_request", async (payload) => {
       const activeRoomId = payload?.roomId || socket.data.roomId;
       const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
@@ -634,10 +641,9 @@ function initSocket(
         roomId: activeRoomId
       };
 
-      if (targetId) {
-        io.to(targetId).emit("voice_call_incoming", callData);
-      } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("voice_call_incoming", callData);
+      const rooms = getCallRooms(activeRoomId, targetId);
+      if (rooms.length > 0) {
+        socket.to(rooms).emit("voice_call_incoming", callData);
       }
     });
 
@@ -646,10 +652,9 @@ function initSocket(
       const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
       const acceptData = { answer: payload?.answer, roomId: activeRoomId };
 
-      if (targetId) {
-        io.to(targetId).emit("voice_call_accepted", acceptData);
-      } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("voice_call_accepted", acceptData);
+      const rooms = getCallRooms(activeRoomId, targetId);
+      if (rooms.length > 0) {
+        socket.to(rooms).emit("voice_call_accepted", acceptData);
       }
     });
 
@@ -658,10 +663,9 @@ function initSocket(
       const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
       const declineData = { busy: Boolean(payload?.busy) };
 
-      if (targetId) {
-        io.to(targetId).emit("voice_call_declined", declineData);
-      } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("voice_call_declined", declineData);
+      const rooms = getCallRooms(activeRoomId, targetId);
+      if (rooms.length > 0) {
+        socket.to(rooms).emit("voice_call_declined", declineData);
       }
     });
 
@@ -669,10 +673,9 @@ function initSocket(
       const activeRoomId = payload?.roomId || socket.data.roomId;
       const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
 
-      if (targetId) {
-        io.to(targetId).emit("voice_call_ended");
-      } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("voice_call_ended");
+      const rooms = getCallRooms(activeRoomId, targetId);
+      if (rooms.length > 0) {
+        socket.to(rooms).emit("voice_call_ended");
       }
     });
 
@@ -681,10 +684,9 @@ function initSocket(
       const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
       const candidateData = { senderId: user.id, candidate: payload?.candidate };
 
-      if (targetId) {
-        io.to(targetId).emit("voice_call_ice", candidateData);
-      } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("voice_call_ice", candidateData);
+      const rooms = getCallRooms(activeRoomId, targetId);
+      if (rooms.length > 0) {
+        socket.to(rooms).emit("voice_call_ice", candidateData);
       }
     });
 
