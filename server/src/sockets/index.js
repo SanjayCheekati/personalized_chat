@@ -580,19 +580,25 @@ function initSocket(
 
     /* ── Clean 1-to-1 WebRTC Voice Call Signaling ── */
     const resolveCallTarget = async (roomId, targetUserId, senderId) => {
-      if (targetUserId) return targetUserId;
-      if (conversationStore && roomId) {
-        const participant = await conversationStore.getOtherParticipant(roomId, senderId);
-        if (participant) return participant;
-      }
-      if (presenceStore?.getOtherUserId && roomId) {
-        const otherInRoom = await presenceStore.getOtherUserId(roomId, senderId);
-        if (otherInRoom) return otherInRoom;
-      }
-      if (presenceStore?.listOnlineUserIds) {
-        const online = await presenceStore.listOnlineUserIds();
-        const otherOnline = online.find((id) => id !== senderId);
-        if (otherOnline) return otherOnline;
+      try {
+        if (targetUserId) return targetUserId;
+        if (conversationStore && roomId) {
+          const participant = await conversationStore.getOtherParticipant(roomId, senderId);
+          if (participant) return participant;
+        }
+        if (presenceStore?.getOtherUserId && roomId) {
+          const otherInRoom = await presenceStore.getOtherUserId(roomId, senderId);
+          if (otherInRoom) return otherInRoom;
+        }
+        if (presenceStore?.listOnlineUserIds) {
+          const online = await presenceStore.listOnlineUserIds();
+          if (Array.isArray(online)) {
+            const otherOnline = online.find((id) => id !== senderId);
+            if (otherOnline) return otherOnline;
+          }
+        }
+      } catch (err) {
+        console.error("Error in resolveCallTarget:", err);
       }
       return null;
     };
@@ -610,7 +616,8 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_incoming", callData);
-      } else if (activeRoomId) {
+      }
+      if (activeRoomId && activeRoomId !== targetId) {
         socket.to(activeRoomId).emit("voice_call_incoming", callData);
       }
     });
@@ -622,7 +629,8 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_accepted", acceptData);
-      } else if (activeRoomId) {
+      }
+      if (activeRoomId && activeRoomId !== targetId) {
         socket.to(activeRoomId).emit("voice_call_accepted", acceptData);
       }
     });
@@ -634,7 +642,8 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_declined", declineData);
-      } else if (activeRoomId) {
+      }
+      if (activeRoomId && activeRoomId !== targetId) {
         socket.to(activeRoomId).emit("voice_call_declined", declineData);
       }
     });
@@ -645,7 +654,8 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_ended");
-      } else if (activeRoomId) {
+      }
+      if (activeRoomId && activeRoomId !== targetId) {
         socket.to(activeRoomId).emit("voice_call_ended");
       }
     });
@@ -657,7 +667,8 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_ice", candidateData);
-      } else if (activeRoomId) {
+      }
+      if (activeRoomId && activeRoomId !== targetId) {
         socket.to(activeRoomId).emit("voice_call_ice", candidateData);
       }
     });

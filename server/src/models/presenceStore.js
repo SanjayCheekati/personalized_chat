@@ -256,6 +256,10 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
     return redisClient.sMembers(onlineUserKey(userId));
   };
 
+  const listOnlineUserIds = async () => {
+    return redisClient.sMembers(onlineUsersKey);
+  };
+
   return {
     canJoin,
     register,
