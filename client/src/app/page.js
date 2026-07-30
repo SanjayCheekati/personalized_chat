@@ -1117,6 +1117,13 @@ export default function Home() {
             </div>
           </div>
         </ChatShell>
+        <VoiceCallModal
+          socket={socketInstance}
+          activeRoomId={auth?.roomId}
+          targetUserId={peer?.id}
+          peerName={peer?.name || peer?.username || "Arjun"}
+          currentUserId={auth?.user?.id}
+        />
       </div>
     );
   }

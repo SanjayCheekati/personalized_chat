@@ -68,6 +68,8 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
   const timerRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const incomingOfferRef = useRef(null);
+  const incomingRoomIdRef = useRef(null);
+  const incomingCallerIdRef = useRef(null);
   const activeRoomIdRef = useRef(activeRoomId);
   const targetUserIdRef = useRef(targetUserId);
 
@@ -95,6 +97,8 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
     }
     pendingCandidatesRef.current = [];
     incomingOfferRef.current = null;
+    incomingRoomIdRef.current = null;
+    incomingCallerIdRef.current = null;
     setCallState("idle");
     setDuration(0);
     setIsMuted(false);
@@ -125,10 +129,12 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
     const pc = new RTCPeerConnection(STUN_SERVERS);
 
     pc.onicecandidate = (event) => {
+      const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+      const targetUser = incomingCallerIdRef.current || targetUserIdRef.current;
       if (event.candidate && socket) {
         socket.emit("voice_call_ice", {
-          roomId: activeRoomIdRef.current,
-          targetUserId: targetUserIdRef.current,
+          roomId: targetRoom,
+          targetUserId: targetUser,
           candidate: event.candidate
         });
       }
@@ -189,6 +195,8 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
 
   // Receiver accepts call
   const acceptVoiceCall = async () => {
+    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+    const targetUser = incomingCallerIdRef.current || targetUserIdRef.current;
     if (!socket || !incomingOfferRef.current) return;
 
     try {
@@ -217,16 +225,16 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
       await pc.setLocalDescription(answer);
 
       socket.emit("voice_call_accept", {
-        roomId: activeRoomIdRef.current,
-        targetUserId: targetUserIdRef.current,
+        roomId: targetRoom,
+        targetUserId: targetUser,
         answer
       });
     } catch (err) {
       console.error("Accept call failed:", err);
       alert("Could not accept call.");
       socket.emit("voice_call_decline", {
-        roomId: activeRoomIdRef.current,
-        targetUserId: targetUserIdRef.current
+        roomId: targetRoom,
+        targetUserId: targetUser
       });
       endCallCleanly();
     }
@@ -234,18 +242,22 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
 
   // Receiver declines call
   const declineVoiceCall = () => {
+    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+    const targetUser = incomingCallerIdRef.current || targetUserIdRef.current;
     socket?.emit("voice_call_decline", {
-      roomId: activeRoomIdRef.current,
-      targetUserId: targetUserIdRef.current
+      roomId: targetRoom,
+      targetUserId: targetUser
     });
     endCallCleanly();
   };
 
   // Either party hangs up
   const hangupVoiceCall = () => {
+    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+    const targetUser = incomingCallerIdRef.current || targetUserIdRef.current;
     socket?.emit("voice_call_hangup", {
-      roomId: activeRoomIdRef.current,
-      targetUserId: targetUserIdRef.current
+      roomId: targetRoom,
+      targetUserId: targetUser
     });
     endCallCleanly();
   };
@@ -283,6 +295,8 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
       }
 
       incomingOfferRef.current = data.offer;
+      incomingRoomIdRef.current = data.roomId;
+      incomingCallerIdRef.current = data.callerId;
       setCallerDisplayName(data.callerName || peerName || "Someone");
       setCallState("incoming");
       onCallStateChange?.("incoming");
