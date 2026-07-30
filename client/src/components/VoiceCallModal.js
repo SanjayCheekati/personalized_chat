@@ -71,8 +71,10 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   const timerRef = useRef(null);
   const pendingCandidates = useRef([]);
   const incomingSignalRef = useRef(null);
+  const incomingRoomIdRef = useRef(null);
   const callStateRef = useRef(callState);
   const activeRoomIdRef = useRef(activeRoomId);
+  const currentUserIdRef = useRef(currentUserId);
 
   useEffect(() => {
     callStateRef.current = callState;
@@ -81,6 +83,10 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   useEffect(() => {
     activeRoomIdRef.current = activeRoomId;
   }, [activeRoomId]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
 
   // Cleanup helper
   const endCallCleanly = useCallback(() => {
@@ -98,6 +104,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     }
     pendingCandidates.current = [];
     incomingSignalRef.current = null;
+    incomingRoomIdRef.current = null;
     setCallState("idle");
     setCallDuration(0);
     setIsMuted(false);
@@ -129,9 +136,10 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && socket) {
+      const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+      if (event.candidate && socket && targetRoom) {
         socket.emit("webrtc_signal", {
-          roomId: activeRoomIdRef.current,
+          roomId: targetRoom,
           signal: { type: "candidate", candidate: event.candidate }
         });
       }
@@ -160,7 +168,8 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
   // Initiate a Call (Caller side)
   const initiateCall = useCallback(async () => {
-    if (!socket || !activeRoomIdRef.current) {
+    const targetRoom = activeRoomIdRef.current;
+    if (!socket || !targetRoom) {
       alert("Please select or open a conversation first to make a call.");
       return;
     }
@@ -184,7 +193,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       await pc.setLocalDescription(offer);
 
       socket.emit("call_user", {
-        roomId: activeRoomIdRef.current,
+        roomId: targetRoom,
         signal: { type: "offer", sdp: offer.sdp }
       });
     } catch (err) {
@@ -196,7 +205,8 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
   // Accept Incoming Call (Receiver side)
   const acceptCall = async () => {
-    if (!socket || !incomingSignalRef.current) return;
+    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+    if (!socket || !incomingSignalRef.current || !targetRoom) return;
 
     try {
       setCallState("connected");
@@ -228,26 +238,28 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       await pc.setLocalDescription(answer);
 
       socket.emit("accept_call", {
-        roomId: activeRoomIdRef.current,
+        roomId: targetRoom,
         signal: { type: "answer", sdp: answer.sdp }
       });
     } catch (err) {
       console.error("Failed to accept call:", err);
       alert("Could not accept call.");
-      socket.emit("reject_call", { roomId: activeRoomIdRef.current });
+      socket.emit("reject_call", { roomId: targetRoom });
       endCallCleanly();
     }
   };
 
   // Decline/Reject Incoming Call
   const rejectCall = () => {
-    socket?.emit("reject_call", { roomId: activeRoomIdRef.current });
+    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+    socket?.emit("reject_call", { roomId: targetRoom });
     endCallCleanly();
   };
 
   // Hangup Active Call
   const terminateCall = () => {
-    socket?.emit("end_call", { roomId: activeRoomIdRef.current });
+    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
+    socket?.emit("end_call", { roomId: targetRoom });
     endCallCleanly();
   };
 
@@ -279,13 +291,19 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     if (!socket) return;
 
     const handleIncomingCall = (data) => {
-      // If user is already on a call, auto-reject with busy status
+      // CRITICAL FIX: Ignore incoming call signals originating from our own caller ID!
+      if (data.callerId && currentUserIdRef.current && String(data.callerId) === String(currentUserIdRef.current)) {
+        return;
+      }
+
+      // If user is already on another active call, auto-reject with busy status
       if (callStateRef.current !== "idle") {
         socket.emit("reject_call", { roomId: data.roomId, busy: true });
         return;
       }
 
       incomingSignalRef.current = data.signal;
+      incomingRoomIdRef.current = data.roomId;
       setCallerName(data.callerName || peerName || "Someone");
       setCallState("incoming");
       onCallStateChange?.("incoming");
@@ -322,6 +340,10 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     };
 
     const handleWebRTCSignal = async (data) => {
+      // Ignore candidates generated by self
+      if (data.senderId && currentUserIdRef.current && String(data.senderId) === String(currentUserIdRef.current)) {
+        return;
+      }
       const { signal } = data;
       if (!signal) return;
 
