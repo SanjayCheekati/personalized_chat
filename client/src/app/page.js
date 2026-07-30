@@ -352,6 +352,9 @@ export default function Home() {
 
     socket.on("receive_message", (message) => {
       setMessages((prev) => upsertMessage(prev, message, auth.user.id));
+      if (message.senderId !== auth.user.id) {
+        setPeer((prev) => ({ ...prev, typing: false }));
+      }
       if (message.kind === "remember" && message.senderId !== auth.user.id) {
         const senderName = message.text?.split(" Remembered")[0] || "Someone";
         setRememberAnimation({ visible: true, senderName });
@@ -753,13 +756,15 @@ export default function Home() {
 
     if (typingRef.current.timeoutId) {
       clearTimeout(typingRef.current.timeoutId);
+      typingRef.current.timeoutId = null;
     }
 
     if (hasText) {
       typingRef.current.timeoutId = setTimeout(() => {
         socket.emit("stop_typing");
         typingRef.current.active = false;
-      }, 1200);
+        typingRef.current.timeoutId = null;
+      }, 3000);
     }
   };
 

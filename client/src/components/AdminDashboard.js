@@ -145,6 +145,12 @@ export default function AdminDashboard({
 
     socket.on("receive_message", (message) => {
       setMessages((prev) => upsertMessage(prev, message, auth.user.id));
+      if (message.senderId !== auth.user.id && message.roomId) {
+        setTypingByConversation((prev) => ({
+          ...prev,
+          [message.roomId]: false
+        }));
+      }
       if (message.kind === "remember" && message.senderId !== auth.user.id) {
         const senderName = message.text?.split(" Remembered")[0] || "Someone";
         setRememberAnimation({ visible: true, senderName });
@@ -185,13 +191,13 @@ export default function AdminDashboard({
     });
 
     socket.on("user_typing", (payload) => {
-      const currentId = activeConversationRef.current;
-      if (!currentId) {
+      const targetConvId = payload?.conversationId || payload?.roomId || activeConversationRef.current;
+      if (!targetConvId) {
         return;
       }
       setTypingByConversation((prev) => ({
         ...prev,
-        [currentId]: Boolean(payload?.typing)
+        [targetConvId]: Boolean(payload?.typing)
       }));
     });
 
@@ -529,13 +535,15 @@ export default function AdminDashboard({
 
     if (typingRef.current.timeoutId) {
       clearTimeout(typingRef.current.timeoutId);
+      typingRef.current.timeoutId = null;
     }
 
     if (hasText) {
       typingRef.current.timeoutId = setTimeout(() => {
         socket.emit("stop_typing");
         typingRef.current.active = false;
-      }, 1200);
+        typingRef.current.timeoutId = null;
+      }, 3000);
     }
   };
 

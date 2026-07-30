@@ -274,33 +274,53 @@ function initSocket(
       }
     });
 
-    socket.on("typing", () => {
+    socket.on("typing", async () => {
       const activeRoomId = socket.data.roomId;
       if (!activeRoomId) {
         return;
       }
-      socket.to(activeRoomId).emit("user_typing", { userId: user.id, typing: true });
+      const receiverId = conversationStore
+        ? await conversationStore.getOtherParticipant(activeRoomId, user.id)
+        : await presenceStore.getOtherUserId(activeRoomId, user.id);
+
+      const typingPayload = {
+        conversationId: activeRoomId,
+        roomId: activeRoomId,
+        userId: user.id,
+        typing: true
+      };
+
+      socket.to(activeRoomId).emit("user_typing", typingPayload);
+      if (receiverId) {
+        io.to(receiverId).emit("user_typing", typingPayload);
+      }
       if (!isAdmin) {
-        io.to(ADMIN_ROOM).emit("admin_typing", {
-          conversationId: activeRoomId,
-          userId: user.id,
-          typing: true
-        });
+        io.to(ADMIN_ROOM).emit("admin_typing", typingPayload);
       }
     });
 
-    socket.on("stop_typing", () => {
+    socket.on("stop_typing", async () => {
       const activeRoomId = socket.data.roomId;
       if (!activeRoomId) {
         return;
       }
-      socket.to(activeRoomId).emit("user_typing", { userId: user.id, typing: false });
+      const receiverId = conversationStore
+        ? await conversationStore.getOtherParticipant(activeRoomId, user.id)
+        : await presenceStore.getOtherUserId(activeRoomId, user.id);
+
+      const typingPayload = {
+        conversationId: activeRoomId,
+        roomId: activeRoomId,
+        userId: user.id,
+        typing: false
+      };
+
+      socket.to(activeRoomId).emit("user_typing", typingPayload);
+      if (receiverId) {
+        io.to(receiverId).emit("user_typing", typingPayload);
+      }
       if (!isAdmin) {
-        io.to(ADMIN_ROOM).emit("admin_typing", {
-          conversationId: activeRoomId,
-          userId: user.id,
-          typing: false
-        });
+        io.to(ADMIN_ROOM).emit("admin_typing", typingPayload);
       }
     });
 
@@ -616,8 +636,7 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_incoming", callData);
-      }
-      if (activeRoomId && activeRoomId !== targetId) {
+      } else if (activeRoomId) {
         socket.to(activeRoomId).emit("voice_call_incoming", callData);
       }
     });
@@ -629,8 +648,7 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_accepted", acceptData);
-      }
-      if (activeRoomId && activeRoomId !== targetId) {
+      } else if (activeRoomId) {
         socket.to(activeRoomId).emit("voice_call_accepted", acceptData);
       }
     });
@@ -642,8 +660,7 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_declined", declineData);
-      }
-      if (activeRoomId && activeRoomId !== targetId) {
+      } else if (activeRoomId) {
         socket.to(activeRoomId).emit("voice_call_declined", declineData);
       }
     });
@@ -654,8 +671,7 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_ended");
-      }
-      if (activeRoomId && activeRoomId !== targetId) {
+      } else if (activeRoomId) {
         socket.to(activeRoomId).emit("voice_call_ended");
       }
     });
@@ -667,8 +683,7 @@ function initSocket(
 
       if (targetId) {
         io.to(targetId).emit("voice_call_ice", candidateData);
-      }
-      if (activeRoomId && activeRoomId !== targetId) {
+      } else if (activeRoomId) {
         socket.to(activeRoomId).emit("voice_call_ice", candidateData);
       }
     });

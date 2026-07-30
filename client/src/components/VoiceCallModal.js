@@ -5,7 +5,9 @@ import { useEffect, useRef, useState, useCallback } from "react";
 const STUN_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" }
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun.services.mozilla.com" }
   ]
 };
 
@@ -73,6 +75,8 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
   const activeRoomIdRef = useRef(activeRoomId);
   const targetUserIdRef = useRef(targetUserId);
 
+  const callStateRef = useRef(callState);
+
   useEffect(() => {
     activeRoomIdRef.current = activeRoomId;
   }, [activeRoomId]);
@@ -80,6 +84,10 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
   useEffect(() => {
     targetUserIdRef.current = targetUserId;
   }, [targetUserId]);
+
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
 
   // Clean tear-down helper
   const endCallCleanly = useCallback(() => {
@@ -90,6 +98,9 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
     }
     if (pcRef.current) {
       pcRef.current.close();
@@ -141,9 +152,12 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
     };
 
     pc.ontrack = (event) => {
-      if (remoteAudioRef.current && event.streams[0]) {
-        remoteAudioRef.current.srcObject = event.streams[0];
-        remoteAudioRef.current.play().catch(() => {});
+      if (remoteAudioRef.current) {
+        const stream = event.streams[0] || new MediaStream([event.track]);
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.play().catch((err) => {
+          console.log("Remote audio playback info:", err);
+        });
       }
     };
 
@@ -291,6 +305,15 @@ export default function VoiceCallModal({ socket, activeRoomId, targetUserId, pee
 
     const handleIncoming = (data) => {
       if (data.callerId && currentUserId && String(data.callerId) === String(currentUserId)) {
+        return;
+      }
+
+      if (callStateRef.current !== "idle") {
+        socket?.emit("voice_call_decline", {
+          roomId: data.roomId,
+          targetUserId: data.callerId,
+          busy: true
+        });
         return;
       }
 
