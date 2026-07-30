@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, Fragment, memo } from "react";
 import { groupMessagesByDate, formatDateSeparator } from "../utils/date";
 
 function formatTime(value) {
@@ -133,6 +133,122 @@ function formatMessageText(text) {
   return result;
 }
 
+// Memoized bubble — only re-renders when its own props change.
+// This prevents every message from re-rendering when e.g. the typing indicator
+// updates, a new message arrives at the bottom, or seen status changes on other
+// messages.
+const MessageBubble = memo(function MessageBubble({
+  message,
+  isMine,
+  isAdmin,
+  currentUserId,
+  peerName,
+  onDelete,
+  onEdit,
+  onReply,
+  firstUnreadId,
+}) {
+  const showNewMessagesLine = message.id === firstUnreadId;
+
+  return (
+    <Fragment>
+      {showNewMessagesLine ? (
+        <div className="flex items-center gap-3 my-3 shrink-0 animate-fade-in">
+          <div className="flex-1 h-[1px] bg-[var(--accent-warm)] opacity-30" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-warm)] bg-[var(--panel-dark)] px-3 py-1 rounded-full border border-[var(--panel-border)] shrink-0 shadow-sm">
+            New Messages
+          </span>
+          <div className="flex-1 h-[1px] bg-[var(--accent-warm)] opacity-30" />
+        </div>
+      ) : null}
+      <div
+        className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
+      >
+        <div className="relative max-w-[80%] sm:max-w-[70%]">
+          <div
+            className={`rounded-2xl border px-3 py-2 text-sm ${
+              isMine
+                ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
+                : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
+            }`}
+          >
+            {message.replyTo ? (
+              <div className="reply-box">
+                <p className="reply-sender">
+                  {message.replyTo.senderId === currentUserId ? "You" : (peerName || "User")}
+                </p>
+                <p className="reply-text">
+                  {message.replyTo.text || ""}
+                </p>
+              </div>
+            ) : null}
+
+            <p className="whitespace-pre-wrap break-words">
+              {formatMessageText(message.text)}
+              <span className="inline-block w-4" />
+              <span className="inline-flex items-center gap-1 text-[9px] text-[var(--ink-soft)] float-right mt-1.5 select-none font-medium">
+                <span>{formatTime(message.timestamp)}</span>
+                {isMine ? <StatusTicks status={message.status} /> : null}
+              </span>
+            </p>
+
+            {/* Hover toolbar */}
+            <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">
+              {isAdmin ? (
+                <>
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(message)}
+                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--accent-warm)] shadow-sm transition hover:text-[var(--ink)]"
+                      aria-label="Delete"
+                    >
+                      <TrashIcon />
+                    </button>
+                  ) : null}
+                  {onEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(message)}
+                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                      aria-label="Edit"
+                    >
+                      <EditIcon />
+                    </button>
+                  ) : null}
+                  {onReply ? (
+                    <button
+                      type="button"
+                      onClick={() => onReply(message)}
+                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                      aria-label="Reply"
+                    >
+                      <ReplyIcon />
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {onReply ? (
+                    <button
+                      type="button"
+                      onClick={() => onReply(message)}
+                      className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
+                      aria-label="Reply"
+                    >
+                      <ReplyIcon />
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Fragment>
+  );
+});
+
 export default function MessageList({
   messages = [],
   currentUserId,
@@ -220,7 +336,7 @@ export default function MessageList({
           </button>
         </div>
       ) : null}
-      {groupedMessages.map((item) => {
+      {groupedMessages.map((item, index) => {
         if (item.type === "date") {
           return (
             <div
@@ -241,7 +357,9 @@ export default function MessageList({
           const formattedTime = formatTime(message.timestamp);
           return (
             <div
-              key={message.id || message.clientId || Math.random()}
+              // Use a stable key: never Math.random() — that destroys & recreates
+              // DOM nodes on every render, causing visible flicker and wasted work.
+              key={message.id || message.clientId || `remember-${message.timestamp}-${index}`}
               className="mx-auto rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-1 text-[11px] text-[var(--ink-soft)]"
             >
               {senderName} Remembered you at {formattedTime}
@@ -249,104 +367,21 @@ export default function MessageList({
           );
         }
 
-        const showNewMessagesLine = message.id === firstUnreadId;
-
         return (
-          <Fragment key={message.id || message.clientId || Math.random()}>
-            {showNewMessagesLine ? (
-              <div className="flex items-center gap-3 my-3 shrink-0 animate-fade-in">
-                <div className="flex-1 h-[1px] bg-[var(--accent-warm)] opacity-30" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent-warm)] bg-[var(--panel-dark)] px-3 py-1 rounded-full border border-[var(--panel-border)] shrink-0 shadow-sm">
-                  New Messages
-                </span>
-                <div className="flex-1 h-[1px] bg-[var(--accent-warm)] opacity-30" />
-              </div>
-            ) : null}
-            <div
-              className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
-            >
-              <div className="relative max-w-[80%] sm:max-w-[70%]">
-                <div
-                  className={`rounded-2xl border px-3 py-2 text-sm ${
-                    isMine
-                      ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
-                      : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
-                  }`}
-                >
-                  {message.replyTo ? (
-                    <div className="reply-box">
-                      <p className="reply-sender">
-                        {message.replyTo.senderId === currentUserId ? "You" : (peerName || "User")}
-                      </p>
-                      <p className="reply-text">
-                        {message.replyTo.text || ""}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <p className="whitespace-pre-wrap break-words">
-                    {formatMessageText(message.text)}
-                    <span className="inline-block w-4" />
-                    <span className="inline-flex items-center gap-1 text-[9px] text-[var(--ink-soft)] float-right mt-1.5 select-none font-medium">
-                      <span>{formatTime(message.timestamp)}</span>
-                      {isMine ? <StatusTicks status={message.status} /> : null}
-                    </span>
-                  </p>
-
-                  {/* Hover toolbar */}
-                  <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">
-                    {isAdmin ? (
-                      <>
-                        {onDelete ? (
-                          <button
-                            type="button"
-                            onClick={() => onDelete(message)}
-                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--accent-warm)] shadow-sm transition hover:text-[var(--ink)]"
-                            aria-label="Delete"
-                          >
-                            <TrashIcon />
-                          </button>
-                        ) : null}
-                        {onEdit ? (
-                          <button
-                            type="button"
-                            onClick={() => onEdit(message)}
-                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
-                            aria-label="Edit"
-                          >
-                            <EditIcon />
-                          </button>
-                        ) : null}
-                        {onReply ? (
-                          <button
-                            type="button"
-                            onClick={() => onReply(message)}
-                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
-                            aria-label="Reply"
-                          >
-                            <ReplyIcon />
-                          </button>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        {onReply ? (
-                          <button
-                            type="button"
-                            onClick={() => onReply(message)}
-                            className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] p-1.5 text-[var(--ink-soft)] shadow-sm transition hover:text-[var(--ink)]"
-                            aria-label="Reply"
-                          >
-                            <ReplyIcon />
-                          </button>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Fragment>
+          <MessageBubble
+            // Stable key: clientId is assigned immediately on optimistic send,
+            // id arrives in the server ACK. Never fall back to Math.random().
+            key={message.id || message.clientId || `msg-${message.timestamp}-${index}`}
+            message={message}
+            isMine={isMine}
+            isAdmin={isAdmin}
+            currentUserId={currentUserId}
+            peerName={peerName}
+            onDelete={onDelete}
+            onEdit={onEdit}
+            onReply={onReply}
+            firstUnreadId={firstUnreadId}
+          />
         );
       })}
       <div ref={endRef} />

@@ -12,8 +12,10 @@ function initSocket(
     cors: {
       origin: corsOrigin || env.CLIENT_ORIGIN
     },
-    pingInterval: 5000,
-    pingTimeout: 5000
+    // Default Socket.IO values (25s/20s). The previous 5s/5s was far too
+    // aggressive — a single slow ping caused a reconnect and re-join sequence.
+    pingInterval: 25000,
+    pingTimeout: 20000
   });
 
   io.use((socket, next) => {
@@ -250,7 +252,9 @@ function initSocket(
         if (receiverId) {
           io.to(receiverId).emit("receive_message", message);
         }
-        await emitAdminConversationUpdate(io, conversationStore, activeRoomId);
+        // Fire non-blocking — admin dashboard update should NOT block the
+        // sender's ACK which is on the critical path.
+        emitAdminConversationUpdate(io, conversationStore, activeRoomId).catch(() => {});
 
         if (receiverId && !receiverActive) {
           sendPushNotification(receiverId, {

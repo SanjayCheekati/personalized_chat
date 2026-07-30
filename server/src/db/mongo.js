@@ -24,7 +24,17 @@ async function connectMongo(env) {
   }
 
   try {
-    const client = new MongoClient(env.MONGO_URL);
+    const client = new MongoClient(env.MONGO_URL, {
+      // Keep up to 10 connections open and ready — avoids TCP handshake delay
+      // on every query in a serverless or fresh-request scenario.
+      maxPoolSize: 10,
+      // Don't hang indefinitely if MongoDB is unreachable on startup.
+      serverSelectionTimeoutMS: 5000,
+      // Kill sockets that go silent mid-query (e.g. network blip on Render).
+      socketTimeoutMS: 45000,
+      // Timeout on initial connect attempt.
+      connectTimeoutMS: 10000
+    });
     await client.connect();
     const dbName = resolveDbName(env);
     const db = client.db(dbName);
@@ -35,5 +45,6 @@ async function connectMongo(env) {
     return { client: null, db: null, dbName: "", connected: false };
   }
 }
+
 
 module.exports = { connectMongo };

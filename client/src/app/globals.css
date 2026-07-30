@@ -1,4 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600&display=swap");
+/* Google Fonts are loaded via preconnect <link> in layout.js for better performance */
+
 
 @tailwind base;
 @tailwind components;
@@ -101,10 +102,14 @@ body {
 
   .animate-fade-in {
     animation: fadeIn 0.4s ease-out;
+    /* Prevent this animation from causing layout recalculations on siblings */
+    contain: layout style;
   }
 
   .animate-pop {
     animation: popIn 0.16s ease-out;
+    /* Same: isolate animation impact */
+    contain: layout style;
   }
 }
 
@@ -124,6 +129,15 @@ body {
   background-size: 120px 120px;
   flex-grow: 1;
   overflow-y: auto;
+  /* Isolate paint/layout so new messages don't trigger full-page reflows.
+     contain:strict = contain:layout + paint + size + style */
+  contain: strict;
+  /* Hint to the compositor that this element changes frequently */
+  will-change: contents;
+  /* Stop scroll chaining on mobile (prevents page bounce while scrolling chat) */
+  overscroll-behavior: contain;
+  /* Enable momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-shell {

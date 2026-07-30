@@ -165,9 +165,12 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
   };
 
   const register = async (roomId, userId, socketId) => {
-    await redisClient.sAdd(roomKey(roomId), userId);
-    await redisClient.sAdd(userKey(roomId, userId), socketId);
-    await redisClient.setEx(socketKey(socketId), socketTtl, JSON.stringify({ roomId, userId }));
+    // Pipeline: 3 commands in a single network round trip.
+    const pipeline = redisClient.multi();
+    pipeline.sAdd(roomKey(roomId), userId);
+    pipeline.sAdd(userKey(roomId, userId), socketId);
+    pipeline.setEx(socketKey(socketId), socketTtl, JSON.stringify({ roomId, userId }));
+    await pipeline.exec();
   };
 
   const unregister = async (socketId) => {
@@ -188,8 +191,12 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
     }
 
     const { roomId, userId } = entry;
-    await redisClient.del(socketKey(socketId));
-    await redisClient.sRem(userKey(roomId, userId), socketId);
+    // Pipeline the delete + sRem into one round trip.
+    const pipeline = redisClient.multi();
+    pipeline.del(socketKey(socketId));
+    pipeline.sRem(userKey(roomId, userId), socketId);
+    await pipeline.exec();
+
     const remaining = await redisClient.sCard(userKey(roomId, userId));
     if (remaining === 0) {
       await redisClient.sRem(roomKey(roomId), userId);
@@ -199,10 +206,13 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
   };
 
   const registerOnline = async (userId, socketId) => {
-    await redisClient.sAdd(onlineUsersKey, userId);
-    await redisClient.sAdd(onlineUserKey(userId), socketId);
-    await redisClient.setEx(onlineSocketKey(socketId), socketTtl, userId);
-    await redisClient.expire(onlineUserKey(userId), socketTtl);
+    // Pipeline: 4 commands in one round trip.
+    const pipeline = redisClient.multi();
+    pipeline.sAdd(onlineUsersKey, userId);
+    pipeline.sAdd(onlineUserKey(userId), socketId);
+    pipeline.setEx(onlineSocketKey(socketId), socketTtl, userId);
+    pipeline.expire(onlineUserKey(userId), socketTtl);
+    await pipeline.exec();
   };
 
   const unregisterOnline = async (socketId) => {
@@ -211,8 +221,12 @@ function createPresenceStore({ redisClient, prefix = "flashchat" } = {}) {
       return null;
     }
 
-    await redisClient.del(onlineSocketKey(socketId));
-    await redisClient.sRem(onlineUserKey(userId), socketId);
+    // Pipeline delete + sRem into one round trip.
+    const pipeline = redisClient.multi();
+    pipeline.del(onlineSocketKey(socketId));
+    pipeline.sRem(onlineUserKey(userId), socketId);
+    await pipeline.exec();
+
     const remaining = await redisClient.sCard(onlineUserKey(userId));
     if (remaining === 0) {
       await redisClient.sRem(onlineUsersKey, userId);

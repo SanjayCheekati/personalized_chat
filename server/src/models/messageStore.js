@@ -1,11 +1,22 @@
 const { nanoid } = require("nanoid");
 
-const MESSAGE_CACHE_TTL = 30;
+// 5 minutes — messages are immutable after write, so a short TTL just creates
+// unnecessary MongoDB round-trips on every page load.
+const MESSAGE_CACHE_TTL = 300;
 const MESSAGE_CACHE_LIMIT = 50;
 
 function createMessageStore({ db, cache } = {}) {
   const rooms = new Map();
   const collection = db ? db.collection("messages") : null;
+
+  // Ensure the compound index exists for the primary query pattern:
+  // { roomId }.sort({ createdAt: -1 }).limit(N)
+  // Without this index MongoDB does a full collection scan per room.
+  if (collection) {
+    collection
+      .createIndex({ roomId: 1, createdAt: -1 })
+      .catch((err) => console.warn("messages index creation failed", err?.message || err));
+  }
 
   const getRoom = (roomId) => {
     if (!rooms.has(roomId)) {

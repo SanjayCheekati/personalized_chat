@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ChatShell from "../components/ChatShell";
 import AdminDashboard from "../components/AdminDashboard";
@@ -75,6 +75,9 @@ export default function Home() {
   const typingRef = useRef({ active: false, timeoutId: null });
   const chatOpenRef = useRef(chatOpen);
   const authRef = useRef(auth);
+  // Track message IDs we've already emitted "seen" for so the effect doesn't
+  // re-emit on every unrelated state update (e.g. typing indicator, new msg).
+  const seenEmittedRef = useRef(new Set());
 
   useEffect(() => {
     chatOpenRef.current = chatOpen;
@@ -124,11 +127,24 @@ export default function Home() {
       return;
     }
 
-    const intervalId = setInterval(() => {
-      window.location.reload();
-    }, 15 * 60 * 1000); // 15 minutes
+    // Instead of a hard reload every 15 minutes (which destroyed the entire
+    // React tree, closed the socket, and re-fetched everything), only reload
+    // when the tab regains focus AND the session is close to expiry.
+    // This avoids disruptive reloads while the user is actively chatting.
+    const SESSION_MAX_MS = 15 * 60 * 1000; // 15 minutes
+    const startTime = Date.now();
 
-    return () => clearInterval(intervalId);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const elapsed = Date.now() - startTime;
+        if (elapsed > SESSION_MAX_MS) {
+          window.location.reload();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [auth, isAdmin]);
 
   useEffect(() => {
@@ -400,8 +416,9 @@ export default function Home() {
       return;
     }
 
+    // Only emit IDs that haven't been marked seen in this session yet.
     const unseen = messages
-      .filter((message) => message.senderId !== auth.user.id && !message.seen)
+      .filter((message) => message.senderId !== auth.user.id && !message.seen && !seenEmittedRef.current.has(message.id))
       .map((message) => message.id)
       .filter(Boolean);
 
@@ -412,19 +429,22 @@ export default function Home() {
     const seenAt = new Date().toISOString();
     socketRef.current.emit("seen_message", { messageIds: unseen, seenAt });
     setMessages((prev) => markMessagesSeen(prev, unseen, seenAt));
+    // Record these IDs so we never re-emit them.
+    unseen.forEach((id) => seenEmittedRef.current.add(id));
   }, [messages, auth, chatOpen]);
 
+  // Compute unread count once; only update document.title when it changes.
+  const unreadCount = useMemo(() => {
+    if (!auth || isAdmin) return 0;
+    return messages.filter((m) => m.senderId !== auth.user.id && !m.seen).length;
+  }, [messages, auth, isAdmin]);
+
   useEffect(() => {
-    if (auth && !isAdmin) {
-      const unread = messages.filter((m) => m.senderId !== auth.user.id && !m.seen).length;
-      document.title = unread > 0 ? `(${unread}) FlashChat` : "FlashChat";
-    } else {
-      document.title = "FlashChat";
-    }
+    document.title = unreadCount > 0 ? `(${unreadCount}) FlashChat` : "FlashChat";
     return () => {
       document.title = "FlashChat";
     };
-  }, [messages, auth, isAdmin]);
+  }, [unreadCount]);
 
   const promptNotifications = (token) => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -1184,12 +1204,16 @@ function markMessagesSeen(list, ids, seenAt) {
     return list;
   }
 
+  // Use a Set for O(1) per-message lookups instead of O(n) Array.includes,
+  // making the whole function O(n) instead of O(n²).
+  const idSet = new Set(ids);
   return list.map((message) =>
-    ids.includes(message.id)
+    idSet.has(message.id)
       ? { ...message, seen: true, seenAt: seenAt || message.seenAt, status: "seen" }
       : message
   );
 }
+
 
 function markMessageDeleted(list, messageId, deletedBy) {
   return list.map((message) =>
