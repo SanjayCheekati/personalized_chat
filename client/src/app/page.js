@@ -95,6 +95,7 @@ export default function Home() {
   const [firstUnreadId, setFirstUnreadId] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [toggleOn, setToggleOn] = useState(true);
+  const [socketInstance, setSocketInstance] = useState(null);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const chatOpenRef = useRef(chatOpen);
@@ -105,6 +106,19 @@ export default function Home() {
 
   useEffect(() => {
     chatOpenRef.current = chatOpen;
+    authRef.current = auth;
+  }, [chatOpen, auth]);
+
+  useEffect(() => {
+    if (!auth) {
+      return;
+    }
+
+    const socket = createSocket({ token: auth.token });
+    socketRef.current = socket;
+    setSocketInstance(socket);
+    setStatus((prev) => ({ ...prev, connecting: true, error: "" }));
+    socket.connect();
   }, [chatOpen]);
 
   useEffect(() => {
@@ -1243,7 +1257,7 @@ export default function Home() {
         onComplete={() => setRememberAnimation({ visible: false, senderName: "" })}
       />
       <VoiceCallModal
-        socket={socketRef.current}
+        socket={socketInstance}
         activeRoomId={auth?.roomId}
         peerName={peer?.name || peer?.username || "Arjun"}
         currentUserId={auth?.user?.id}

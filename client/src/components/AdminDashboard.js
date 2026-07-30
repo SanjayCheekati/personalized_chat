@@ -41,6 +41,7 @@ export default function AdminDashboard({
   const [users, setUsers] = useState([]);
   const [typingByConversation, setTypingByConversation] = useState({});
   const [passwordDrafts, setPasswordDrafts] = useState({});
+  const [socketInstance, setSocketInstance] = useState(null);
   const socketRef = useRef(null);
   const typingRef = useRef({ active: false, timeoutId: null });
   const activeConversationRef = useRef(null);
@@ -122,6 +123,7 @@ export default function AdminDashboard({
   useEffect(() => {
     const socket = createSocket({ token: auth.token });
     socketRef.current = socket;
+    setSocketInstance(socket);
     setStatus((prev) => ({ ...prev, connecting: true, error: "" }));
     socket.connect();
 
@@ -958,7 +960,7 @@ export default function AdminDashboard({
         onComplete={() => setRememberAnimation({ visible: false, senderName: "" })}
       />
       <VoiceCallModal
-        socket={socketRef.current}
+        socket={socketInstance}
         activeRoomId={activeConversationId}
         peerName={activeUser?.name || activeUser?.username || "User"}
         currentUserId={auth?.user?.id}
