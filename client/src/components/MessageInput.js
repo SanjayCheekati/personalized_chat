@@ -30,6 +30,14 @@ export default function MessageInput({
     const next = event.target.value;
     onValueChange?.(next);
     onTyping?.(next.length > 0);
+
+    // Auto-grow: reset to auto first so shrinking works correctly,
+    // then expand to scrollHeight capped at ~4 lines.
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    }
   };
 
   const submit = () => {
@@ -39,6 +47,11 @@ export default function MessageInput({
     onSend?.(value);
     onValueChange?.("");
     onTyping?.(false);
+    // Reset height after clearing
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+    }
     requestAnimationFrame(() => {
       focusInput();
     });
@@ -111,7 +124,8 @@ export default function MessageInput({
           onBlur={handleBlur}
           rows={1}
           placeholder={disabled ? "Connecting..." : "Type a message"}
-          className="min-h-[44px] w-full resize-none rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+          className="min-h-[44px] w-full resize-none rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] transition-[height] duration-100"
+          style={{ overflow: "hidden" }}
         />
 
         <button

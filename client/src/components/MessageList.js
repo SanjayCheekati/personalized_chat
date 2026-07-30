@@ -187,10 +187,14 @@ const MessageBubble = memo(function MessageBubble({
               {formatMessageText(message.text)}
               <span className="inline-block w-4" />
               <span className="inline-flex items-center gap-1 text-[9px] text-[var(--ink-soft)] float-right mt-1.5 select-none font-medium">
+                {message.edited && !message.deleted ? (
+                  <span className="italic opacity-70">edited</span>
+                ) : null}
                 <span>{formatTime(message.timestamp)}</span>
                 {isMine ? <StatusTicks status={message.status} /> : null}
               </span>
             </p>
+
 
             {/* Hover toolbar */}
             <div className="absolute -top-3 right-2 hidden items-center gap-1 group-hover:flex">

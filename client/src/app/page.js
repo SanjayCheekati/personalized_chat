@@ -32,6 +32,28 @@ const DEFAULT_PEER = {
   lastSeen: null
 };
 
+// Map raw server/socket error codes to user-friendly messages.
+const ERROR_MESSAGES = {
+  invalid_credentials: "Wrong username or password.",
+  missing_credentials: "Please enter your username and password.",
+  user_exists: "That username is already taken.",
+  user_disabled: "This account has been suspended.",
+  passwords_do_not_match: "Passwords don\'t match — please re-enter.",
+  signup_failed: "Couldn\'t create account. Please try again.",
+  login_failed: "Sign in failed. Please try again.",
+  room_full: "Chat is currently full. Try again in a moment.",
+  connect_error: "Can\'t connect to the server. Check your internet.",
+  edit_failed: "Couldn\'t edit that message.",
+  delete_failed: "Couldn\'t delete that message.",
+  remember_failed: "Couldn\'t send the Remember. Try again.",
+  request_failed: "Couldn\'t send your request. Please try again."
+};
+
+function friendlyError(code) {
+  if (!code) return "";
+  return ERROR_MESSAGES[code] ?? code;
+}
+
 export default function Home() {
   const router = useRouter();
   const [auth, setAuth] = useState(null);
@@ -61,6 +83,7 @@ export default function Home() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotForm, setForgotForm] = useState({ username: "", message: "" });
   const [forgotStatus, setForgotStatus] = useState({ loading: false, error: "", done: false });
+  const [authLoading, setAuthLoading] = useState(false);
   const [status, setStatus] = useState({
     connecting: false,
     connected: false,
@@ -463,6 +486,7 @@ export default function Home() {
   const handleLogin = async (event) => {
     event.preventDefault();
     setStatus((prev) => ({ ...prev, error: "" }));
+    setAuthLoading(true);
 
     try {
       const data = await loginWithPassword(loginForm.username, loginForm.password);
@@ -491,6 +515,7 @@ export default function Home() {
       });
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "login_failed" }));
+      setAuthLoading(false);
     }
   };
 
@@ -502,6 +527,8 @@ export default function Home() {
       setStatus((prev) => ({ ...prev, error: "passwords_do_not_match" }));
       return;
     }
+
+    setAuthLoading(true);
 
     try {
       const data = await signUp(signupForm.username, signupForm.password);
@@ -531,6 +558,7 @@ export default function Home() {
       });
     } catch (error) {
       setStatus((prev) => ({ ...prev, error: error?.message || "signup_failed" }));
+      setAuthLoading(false);
     }
   };
 
@@ -819,9 +847,18 @@ export default function Home() {
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5"
+                disabled={authLoading}
+                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Sign in
+                {authLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Signing in…
+                  </span>
+                ) : "Sign in"}
               </button>
 
               <button
@@ -833,7 +870,9 @@ export default function Home() {
               </button>
 
               {status.error ? (
-                <p className="text-sm text-[var(--accent-warm)]">{status.error}</p>
+                <p className="flex items-center gap-1.5 text-sm text-[var(--accent-warm)]">
+                  <span>⚠</span>{friendlyError(status.error)}
+                </p>
               ) : null}
             </form>
           ) : (
@@ -889,13 +928,24 @@ export default function Home() {
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5"
+                disabled={authLoading}
+                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Create account
+                {authLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Creating account…
+                  </span>
+                ) : "Create account"}
               </button>
 
               {status.error ? (
-                <p className="text-sm text-[var(--accent-warm)]">{status.error}</p>
+                <p className="flex items-center gap-1.5 text-sm text-[var(--accent-warm)]">
+                  <span>⚠</span>{friendlyError(status.error)}
+                </p>
               ) : null}
             </form>
           )}
@@ -1014,7 +1064,7 @@ export default function Home() {
                     {peer.name || "Arjun"}
                   </p>
                   <p className="truncate text-xs text-[var(--ink-soft)]">
-                    {peer.typing ? "typing..." : preview}
+                    {peer.typing ? "typing…" : preview || "No messages yet — say hi! 👋"}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 text-[10px] text-[var(--ink-soft)]">
@@ -1061,12 +1111,21 @@ export default function Home() {
                 <HeartIcon className={toggleOn ? "text-[#ef4b5f]" : "text-black"} />
               </button>
               <div className="min-w-0">
-                <p
-                  className="truncate text-sm font-semibold text-[var(--ink)] cursor-pointer hover:underline"
-                  onClick={handleClearHistory}
-                >
-                  {peer.name}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p
+                    className="truncate text-sm font-semibold text-[var(--ink)] cursor-pointer hover:underline"
+                    onClick={handleClearHistory}
+                  >
+                    {peer.name}
+                  </p>
+                  {/* Connection status pill — only visible when disconnected */}
+                  {!status.connected && auth && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--accent-warm)] bg-opacity-15 px-2 py-0.5 text-[10px] font-semibold text-[var(--accent-warm)]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-warm)] animate-pulse" />
+                      {status.connecting ? "Connecting…" : "Disconnected"}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-[var(--ink-soft)]">{headerStatus}</p>
               </div>
             </div>
