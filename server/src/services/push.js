@@ -39,8 +39,9 @@ async function sendPushNotification(receiverId, { title, body, roomId }) {
 
   const promises = receiver.pushSubscriptions.map((sub) =>
     webpush.sendNotification(sub, payload).catch(async (error) => {
-      console.error("Push notification delivery failed for endpoint:", sub.endpoint, error.statusCode || error);
-      if (error.statusCode === 410 || error.statusCode === 404) {
+      const statusCode = error.statusCode || error;
+      console.error(`Push notification delivery failed (${statusCode}) for endpoint:`, sub.endpoint);
+      if ([403, 404, 410].includes(error.statusCode)) {
         await userStore.removePushSubscription(receiverId, sub.endpoint);
       }
     })
