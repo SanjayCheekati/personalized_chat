@@ -607,11 +607,10 @@ function initSocket(
         roomId: activeRoomId
       };
 
-      if (activeRoomId) {
-        socket.to(activeRoomId).emit("incoming_call", callData);
-      }
       if (receiverId) {
         io.to(receiverId).emit("incoming_call", callData);
+      } else if (activeRoomId) {
+        socket.to(activeRoomId).emit("incoming_call", callData);
       }
     });
 
@@ -620,11 +619,10 @@ function initSocket(
       const receiverId = await findCallRecipientId(activeRoomId, user.id);
 
       const acceptData = { signal: payload?.signal, roomId: activeRoomId };
-      if (activeRoomId) {
-        socket.to(activeRoomId).emit("call_accepted", acceptData);
-      }
       if (receiverId) {
         io.to(receiverId).emit("call_accepted", acceptData);
+      } else if (activeRoomId) {
+        socket.to(activeRoomId).emit("call_accepted", acceptData);
       }
     });
 
@@ -633,11 +631,10 @@ function initSocket(
       const receiverId = await findCallRecipientId(activeRoomId, user.id);
 
       const rejectData = { busy: payload?.busy || false };
-      if (activeRoomId) {
-        socket.to(activeRoomId).emit("call_rejected", rejectData);
-      }
       if (receiverId) {
         io.to(receiverId).emit("call_rejected", rejectData);
+      } else if (activeRoomId) {
+        socket.to(activeRoomId).emit("call_rejected", rejectData);
       }
     });
 
@@ -645,11 +642,10 @@ function initSocket(
       const activeRoomId = payload?.roomId || socket.data.roomId;
       const receiverId = await findCallRecipientId(activeRoomId, user.id);
 
-      if (activeRoomId) {
-        socket.to(activeRoomId).emit("call_ended");
-      }
       if (receiverId) {
         io.to(receiverId).emit("call_ended");
+      } else if (activeRoomId) {
+        socket.to(activeRoomId).emit("call_ended");
       }
     });
 
@@ -658,11 +654,10 @@ function initSocket(
       const receiverId = await findCallRecipientId(activeRoomId, user.id);
 
       const signalData = { senderId: user.id, signal: payload?.signal };
-      if (activeRoomId) {
-        socket.to(activeRoomId).emit("webrtc_signal", signalData);
-      }
       if (receiverId) {
         io.to(receiverId).emit("webrtc_signal", signalData);
+      } else if (activeRoomId) {
+        socket.to(activeRoomId).emit("webrtc_signal", signalData);
       }
     });
 

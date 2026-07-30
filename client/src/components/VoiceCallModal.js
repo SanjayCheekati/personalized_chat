@@ -296,8 +296,13 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
         return;
       }
 
-      // If user is already on another active call, auto-reject with busy status
-      if (callStateRef.current !== "idle") {
+      // If already in 'incoming' state for a call, ignore duplicate incoming signals
+      if (callStateRef.current === "incoming") {
+        return;
+      }
+
+      // If user is already on an active call ('calling' or 'connected'), send busy status
+      if (callStateRef.current === "calling" || callStateRef.current === "connected") {
         socket.emit("reject_call", { roomId: data.roomId, busy: true });
         return;
       }
