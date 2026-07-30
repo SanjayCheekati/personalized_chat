@@ -9,6 +9,53 @@ const ICE_SERVERS = {
   ]
 };
 
+// Web Audio API Ringtone Synthesizer (0 external mp3 asset dependencies)
+function startSyntheticRingtone(type = "incoming") {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return () => {};
+    const ctx = new AudioCtx();
+    let intervalId;
+
+    const playPulse = () => {
+      if (ctx.state === "suspended") ctx.resume();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      const freq1 = type === "incoming" ? 440 : 480;
+      const freq2 = type === "incoming" ? 480 : 520;
+
+      osc1.type = "sine";
+      osc2.type = "sine";
+      osc1.frequency.setValueAtTime(freq1, ctx.currentTime);
+      osc2.frequency.setValueAtTime(freq2, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (type === "incoming" ? 1.5 : 1.0));
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start();
+      osc2.start();
+      osc1.stop(ctx.currentTime + (type === "incoming" ? 1.5 : 1.0));
+      osc2.stop(ctx.currentTime + (type === "incoming" ? 1.5 : 1.0));
+    };
+
+    playPulse();
+    intervalId = setInterval(playPulse, type === "incoming" ? 2500 : 3000);
+
+    return () => {
+      clearInterval(intervalId);
+      ctx.close().catch(() => {});
+    };
+  } catch (e) {
+    return () => {};
+  }
+}
+
 export default function VoiceCallModal({ socket, activeRoomId, peerName, currentUserId, onCallStateChange }) {
   const [callState, setCallState] = useState("idle"); // idle | calling | incoming | connected
   const [callerName, setCallerName] = useState("");
@@ -158,7 +205,17 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
         setIsMuted(!audioTrack.enabled);
       }
     }
-  };
+  // Ringtone sound effect
+  useEffect(() => {
+    if (callState === "incoming") {
+      const stopRingtone = startSyntheticRingtone("incoming");
+      return () => stopRingtone();
+    }
+    if (callState === "calling") {
+      const stopRingtone = startSyntheticRingtone("outgoing");
+      return () => stopRingtone();
+    }
+  }, [callState]);
 
   // Handle Socket Events
   useEffect(() => {

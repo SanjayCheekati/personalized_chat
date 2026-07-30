@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
 import RememberAnimation from "./RememberAnimation";
+import VoiceCallModal from "./VoiceCallModal";
 import { createSocket } from "../socket/client";
 import {
   fetchAdminConversations,
@@ -702,23 +703,42 @@ export default function AdminDashboard({
             </div>
             <div className="flex items-center gap-2">
               {activeConversationId && !adminPanelOpen ? (
+                <>
+                  {/* Phone Call button for Admin */}
+                  <button
+                    type="button"
+                    onClick={() => window.__triggerVoiceCall?.()}
+                    disabled={!status.connected}
+                    className="flex items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 p-2 border border-emerald-500/30 transition hover:bg-emerald-500 hover:text-white hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                    aria-label="Start Voice Call"
+                    title="Start Voice Call"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                      <path d="M6.62 10.79a15.053 15.053 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemember}
+                    disabled={rememberCooldown}
+                    className={`rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5 ${rememberCooldown ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {rememberCooldown ? "💕" : "Remember"}
+                  </button>
+                </>
+              ) : null}
+              {/* Only show Bell icon when notifications are NOT yet allowed */}
+              {!notificationsEnabled && (
                 <button
                   type="button"
-                  onClick={handleRemember}
-                  disabled={rememberCooldown}
-                  className={`rounded-full bg-[var(--accent)] px-3 py-2 text-[10px] font-semibold text-white transition hover:-translate-y-0.5 ${rememberCooldown ? "opacity-50 cursor-not-allowed" : ""}`}
+                  onClick={onToggleNotifications}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                  aria-label="Enable notifications"
+                  title="Enable Notifications"
                 >
-                  {rememberCooldown ? "💕" : "Remember"}
+                  <BellIcon enabled={false} />
                 </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={onToggleNotifications}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
-                aria-label="Toggle notifications"
-              >
-                <BellIcon enabled={notificationsEnabled} />
-              </button>
+              )}
               <button
                 type="button"
                 onClick={onLogout}
@@ -936,6 +956,12 @@ export default function AdminDashboard({
         visible={rememberAnimation.visible}
         senderName={rememberAnimation.senderName}
         onComplete={() => setRememberAnimation({ visible: false, senderName: "" })}
+      />
+      <VoiceCallModal
+        socket={socketRef.current}
+        activeRoomId={activeConversationId}
+        peerName={activeUser?.name || activeUser?.username || "User"}
+        currentUserId={auth?.user?.id}
       />
     </div>
   );

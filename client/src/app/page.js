@@ -1170,14 +1170,17 @@ export default function Home() {
               >
                 {rememberCooldown ? "💕" : "Remember"}
               </button>
-              <button
-                type="button"
-                onClick={handleToggleNotifications}
-                className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
-                aria-label="Toggle notifications"
-              >
-                <BellIcon enabled={notificationsEnabled} />
-              </button>
+              {!notificationsEnabled && (
+                <button
+                  type="button"
+                  onClick={handleToggleNotifications}
+                  className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-dark)] p-2 transition hover:-translate-y-0.5"
+                  aria-label="Enable notifications"
+                  title="Enable Notifications"
+                >
+                  <BellIcon enabled={false} />
+                </button>
+              )}
             </div>
           </div>
         }
