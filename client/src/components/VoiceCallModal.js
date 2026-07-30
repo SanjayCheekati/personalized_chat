@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 const ICE_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" }
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" }
   ]
 };
 
@@ -67,6 +68,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   const remoteAudioRef = useRef(null);
   const timerRef = useRef(null);
   const pendingCandidates = useRef([]);
+  const incomingSignalRef = useRef(null);
 
   // Cleanup helper
   const endCallCleanly = useCallback(() => {
@@ -83,6 +85,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       pcRef.current = null;
     }
     pendingCandidates.current = [];
+    incomingSignalRef.current = null;
     setCallState("idle");
     setCallDuration(0);
     setIsMuted(false);
@@ -92,6 +95,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   // Start Call Duration Timer
   const startTimer = useCallback(() => {
     setCallDuration(0);
+    if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setCallDuration((prev) => prev + 1);
     }, 1000);
@@ -106,11 +110,16 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
   // Create RTCPeerConnection instance
   const createPeerConnection = useCallback(() => {
+    if (pcRef.current) {
+      pcRef.current.close();
+    }
+
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
     pc.onicecandidate = (event) => {
       if (event.candidate && socket) {
         socket.emit("webrtc_signal", {
+          roomId: activeRoomId,
           signal: { type: "candidate", candidate: event.candidate }
         });
       }
@@ -119,16 +128,20 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     pc.ontrack = (event) => {
       if (remoteAudioRef.current && event.streams[0]) {
         remoteAudioRef.current.srcObject = event.streams[0];
+        remoteAudioRef.current.play().catch(() => {});
       }
     };
 
     pcRef.current = pc;
     return pc;
-  }, [socket]);
+  }, [socket, activeRoomId]);
 
-  // Initiate a Call
+  // Initiate a Call (Caller side)
   const initiateCall = useCallback(async () => {
-    if (!socket || !activeRoomId) return;
+    if (!socket || !activeRoomId) {
+      alert("Please open a conversation to call.");
+      return;
+    }
 
     try {
       setCallState("calling");
@@ -143,7 +156,10 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit("call_user", { signal: { type: "offer", sdp: offer.sdp } });
+      socket.emit("call_user", {
+        roomId: activeRoomId,
+        signal: { type: "offer", sdp: offer.sdp }
+      });
     } catch (err) {
       console.error("Failed to start voice call:", err);
       alert("Could not access microphone.");
@@ -151,9 +167,9 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     }
   }, [socket, activeRoomId, createPeerConnection, endCallCleanly, onCallStateChange]);
 
-  // Accept Incoming Call
+  // Accept Incoming Call (Receiver side)
   const acceptCall = async () => {
-    if (!socket || !activeRoomId) return;
+    if (!socket || !incomingSignalRef.current) return;
 
     try {
       setCallState("connected");
@@ -166,33 +182,40 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       const pc = createPeerConnection();
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      // Process queued candidates if any
+      // Set Remote Description from incoming SDP offer
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingSignalRef.current));
+
+      // Process any ICE candidates that arrived before remote description was set
       while (pendingCandidates.current.length > 0) {
-        const candidate = pendingCandidates.current.shift();
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        const cand = pendingCandidates.current.shift();
+        await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       }
 
+      // Create & set local answer
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      socket.emit("accept_call", { signal: { type: "answer", sdp: answer.sdp } });
+      socket.emit("accept_call", {
+        roomId: activeRoomId,
+        signal: { type: "answer", sdp: answer.sdp }
+      });
     } catch (err) {
       console.error("Failed to accept call:", err);
-      alert("Could not access microphone.");
-      socket.emit("reject_call");
+      alert("Could not accept call.");
+      socket.emit("reject_call", { roomId: activeRoomId });
       endCallCleanly();
     }
   };
 
   // Decline/Reject Incoming Call
   const rejectCall = () => {
-    socket?.emit("reject_call");
+    socket?.emit("reject_call", { roomId: activeRoomId });
     endCallCleanly();
   };
 
   // Hangup Active Call
   const terminateCall = () => {
-    socket?.emit("end_call");
+    socket?.emit("end_call", { roomId: activeRoomId });
     endCallCleanly();
   };
 
@@ -223,22 +246,27 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   useEffect(() => {
     if (!socket) return;
 
-    const handleIncomingCall = async (data) => {
+    const handleIncomingCall = (data) => {
+      incomingSignalRef.current = data.signal;
       setCallerName(data.callerName || peerName || "Someone");
       setCallState("incoming");
       onCallStateChange?.("incoming");
-
-      // Save SDP Offer in peer connection
-      const pc = createPeerConnection();
-      await pc.setRemoteDescription(new RTCSessionDescription(data.signal));
     };
 
     const handleCallAccepted = async (data) => {
       if (pcRef.current && data.signal) {
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.signal));
-        setCallState("connected");
-        onCallStateChange?.("connected");
-        startTimer();
+        try {
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.signal));
+          while (pendingCandidates.current.length > 0) {
+            const cand = pendingCandidates.current.shift();
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          }
+          setCallState("connected");
+          onCallStateChange?.("connected");
+          startTimer();
+        } catch (err) {
+          console.error("Error setting remote description on accept:", err);
+        }
       }
     };
 
@@ -257,7 +285,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
       if (signal.type === "candidate") {
         if (pcRef.current && pcRef.current.remoteDescription) {
-          await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
         } else {
           pendingCandidates.current.push(signal.candidate);
         }
@@ -277,7 +305,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       socket.off("call_ended", handleCallEnded);
       socket.off("webrtc_signal", handleWebRTCSignal);
     };
-  }, [socket, peerName, createPeerConnection, startTimer, endCallCleanly, onCallStateChange]);
+  }, [socket, peerName, startTimer, endCallCleanly, onCallStateChange]);
 
   // Expose call trigger to window
   useEffect(() => {
@@ -289,7 +317,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
   return (
     <>
       {/* Remote Audio Element */}
-      <audio ref={remoteAudioRef} autoPlay />
+      <audio ref={remoteAudioRef} autoPlay playsInline />
 
       {/* Calling / Outgoing State Modal */}
       {callState === "calling" && (
