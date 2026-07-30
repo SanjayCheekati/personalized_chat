@@ -962,6 +962,7 @@ export default function AdminDashboard({
       <VoiceCallModal
         socket={socketInstance}
         activeRoomId={activeConversationId}
+        targetUserId={activeUser?.id}
         peerName={activeUser?.name || activeUser?.username || "User"}
         currentUserId={auth?.user?.id}
       />

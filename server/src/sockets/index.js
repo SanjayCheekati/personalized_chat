@@ -578,86 +578,87 @@ function initSocket(
       }
     });
 
-    /* ── WebRTC 1-to-1 Voice Call Signaling ── */
-    const findCallRecipientId = async (targetRoomId, senderId) => {
-      if (conversationStore && targetRoomId) {
-        const participant = await conversationStore.getOtherParticipant(targetRoomId, senderId);
+    /* ── Clean 1-to-1 WebRTC Voice Call Signaling ── */
+    const resolveCallTarget = async (roomId, targetUserId, senderId) => {
+      if (targetUserId) return targetUserId;
+      if (conversationStore && roomId) {
+        const participant = await conversationStore.getOtherParticipant(roomId, senderId);
         if (participant) return participant;
       }
-      if (presenceStore?.getOtherUserId && targetRoomId) {
-        const inRoom = await presenceStore.getOtherUserId(targetRoomId, senderId);
-        if (inRoom) return inRoom;
+      if (presenceStore?.getOtherUserId && roomId) {
+        const otherInRoom = await presenceStore.getOtherUserId(roomId, senderId);
+        if (otherInRoom) return otherInRoom;
       }
       if (presenceStore?.listOnlineUserIds) {
         const online = await presenceStore.listOnlineUserIds();
-        const other = online.find((id) => id !== senderId);
-        if (other) return other;
+        const otherOnline = online.find((id) => id !== senderId);
+        if (otherOnline) return otherOnline;
       }
       return null;
     };
 
-    socket.on("call_user", async (payload) => {
+    socket.on("voice_call_request", async (payload) => {
       const activeRoomId = payload?.roomId || socket.data.roomId;
-      const receiverId = await findCallRecipientId(activeRoomId, user.id);
+      const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
 
       const callData = {
         callerId: user.id,
         callerName: user.name || user.username || "Someone",
-        signal: payload?.signal,
+        offer: payload?.offer,
         roomId: activeRoomId
       };
 
-      if (receiverId) {
-        io.to(receiverId).emit("incoming_call", callData);
+      if (targetId) {
+        io.to(targetId).emit("voice_call_incoming", callData);
       } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("incoming_call", callData);
+        socket.to(activeRoomId).emit("voice_call_incoming", callData);
       }
     });
 
-    socket.on("accept_call", async (payload) => {
+    socket.on("voice_call_accept", async (payload) => {
       const activeRoomId = payload?.roomId || socket.data.roomId;
-      const receiverId = await findCallRecipientId(activeRoomId, user.id);
+      const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
+      const acceptData = { answer: payload?.answer, roomId: activeRoomId };
 
-      const acceptData = { signal: payload?.signal, roomId: activeRoomId };
-      if (receiverId) {
-        io.to(receiverId).emit("call_accepted", acceptData);
+      if (targetId) {
+        io.to(targetId).emit("voice_call_accepted", acceptData);
       } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("call_accepted", acceptData);
+        socket.to(activeRoomId).emit("voice_call_accepted", acceptData);
       }
     });
 
-    socket.on("reject_call", async (payload) => {
+    socket.on("voice_call_decline", async (payload) => {
       const activeRoomId = payload?.roomId || socket.data.roomId;
-      const receiverId = await findCallRecipientId(activeRoomId, user.id);
+      const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
+      const declineData = { busy: Boolean(payload?.busy) };
 
-      const rejectData = { busy: payload?.busy || false };
-      if (receiverId) {
-        io.to(receiverId).emit("call_rejected", rejectData);
+      if (targetId) {
+        io.to(targetId).emit("voice_call_declined", declineData);
       } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("call_rejected", rejectData);
+        socket.to(activeRoomId).emit("voice_call_declined", declineData);
       }
     });
 
-    socket.on("end_call", async (payload) => {
+    socket.on("voice_call_hangup", async (payload) => {
       const activeRoomId = payload?.roomId || socket.data.roomId;
-      const receiverId = await findCallRecipientId(activeRoomId, user.id);
+      const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
 
-      if (receiverId) {
-        io.to(receiverId).emit("call_ended");
+      if (targetId) {
+        io.to(targetId).emit("voice_call_ended");
       } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("call_ended");
+        socket.to(activeRoomId).emit("voice_call_ended");
       }
     });
 
-    socket.on("webrtc_signal", async (payload) => {
+    socket.on("voice_call_ice", async (payload) => {
       const activeRoomId = payload?.roomId || socket.data.roomId;
-      const receiverId = await findCallRecipientId(activeRoomId, user.id);
+      const targetId = await resolveCallTarget(activeRoomId, payload?.targetUserId, user.id);
+      const candidateData = { senderId: user.id, candidate: payload?.candidate };
 
-      const signalData = { senderId: user.id, signal: payload?.signal };
-      if (receiverId) {
-        io.to(receiverId).emit("webrtc_signal", signalData);
+      if (targetId) {
+        io.to(targetId).emit("voice_call_ice", candidateData);
       } else if (activeRoomId) {
-        socket.to(activeRoomId).emit("webrtc_signal", signalData);
+        socket.to(activeRoomId).emit("voice_call_ice", candidateData);
       }
     });
 

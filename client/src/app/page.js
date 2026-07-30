@@ -1259,6 +1259,7 @@ export default function Home() {
       <VoiceCallModal
         socket={socketInstance}
         activeRoomId={auth?.roomId}
+        targetUserId={peer?.id}
         peerName={peer?.name || peer?.username || "Arjun"}
         currentUserId={auth?.user?.id}
       />

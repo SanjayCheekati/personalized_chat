@@ -2,18 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
-const ICE_SERVERS = {
+const STUN_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun3.l.google.com:19302" },
-    { urls: "stun:stun4.l.google.com:19302" }
+    { urls: "stun:stun1.l.google.com:19302" }
   ]
 };
 
-// Web Audio API Ringtone Synthesizer (0 external mp3 asset dependencies)
-function startSyntheticRingtone(type = "incoming") {
+// Web Audio API Ringtone Synthesizer
+function startRingtone(type = "incoming") {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return () => {};
@@ -59,36 +56,30 @@ function startSyntheticRingtone(type = "incoming") {
   }
 }
 
-export default function VoiceCallModal({ socket, activeRoomId, peerName, currentUserId, onCallStateChange }) {
+export default function VoiceCallModal({ socket, activeRoomId, targetUserId, peerName, currentUserId, onCallStateChange }) {
   const [callState, setCallState] = useState("idle"); // idle | calling | incoming | connected
-  const [callerName, setCallerName] = useState("");
+  const [callerDisplayName, setCallerDisplayName] = useState("");
   const [isMuted, setIsMuted] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const timerRef = useRef(null);
-  const pendingCandidates = useRef([]);
-  const incomingSignalRef = useRef(null);
-  const incomingRoomIdRef = useRef(null);
-  const callStateRef = useRef(callState);
+  const pendingCandidatesRef = useRef([]);
+  const incomingOfferRef = useRef(null);
   const activeRoomIdRef = useRef(activeRoomId);
-  const currentUserIdRef = useRef(currentUserId);
-
-  useEffect(() => {
-    callStateRef.current = callState;
-  }, [callState]);
+  const targetUserIdRef = useRef(targetUserId);
 
   useEffect(() => {
     activeRoomIdRef.current = activeRoomId;
   }, [activeRoomId]);
 
   useEffect(() => {
-    currentUserIdRef.current = currentUserId;
-  }, [currentUserId]);
+    targetUserIdRef.current = targetUserId;
+  }, [targetUserId]);
 
-  // Cleanup helper
+  // Clean tear-down helper
   const endCallCleanly = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -102,26 +93,24 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       pcRef.current.close();
       pcRef.current = null;
     }
-    pendingCandidates.current = [];
-    incomingSignalRef.current = null;
-    incomingRoomIdRef.current = null;
+    pendingCandidatesRef.current = [];
+    incomingOfferRef.current = null;
     setCallState("idle");
-    setCallDuration(0);
+    setDuration(0);
     setIsMuted(false);
     onCallStateChange?.("idle");
   }, [onCallStateChange]);
 
-  // Start Call Duration Timer
+  // Start Call Timer
   const startTimer = useCallback(() => {
-    setCallDuration(0);
+    setDuration(0);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setCallDuration((prev) => prev + 1);
+      setDuration((prev) => prev + 1);
     }, 1000);
   }, []);
 
-  // Format Duration string
-  const formatDuration = (seconds) => {
+  const formatTimer = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
@@ -133,14 +122,14 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       pcRef.current.close();
     }
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(STUN_SERVERS);
 
     pc.onicecandidate = (event) => {
-      const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
-      if (event.candidate && socket && targetRoom) {
-        socket.emit("webrtc_signal", {
-          roomId: targetRoom,
-          signal: { type: "candidate", candidate: event.candidate }
+      if (event.candidate && socket) {
+        socket.emit("voice_call_ice", {
+          roomId: activeRoomIdRef.current,
+          targetUserId: targetUserIdRef.current,
+          candidate: event.candidate
         });
       }
     };
@@ -153,11 +142,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     };
 
     pc.onconnectionstatechange = () => {
-      if (
-        pc.connectionState === "failed" ||
-        pc.connectionState === "disconnected" ||
-        pc.connectionState === "closed"
-      ) {
+      if (pc.connectionState === "failed" || pc.connectionState === "disconnected" || pc.connectionState === "closed") {
         endCallCleanly();
       }
     };
@@ -166,11 +151,10 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
     return pc;
   }, [socket, endCallCleanly]);
 
-  // Initiate a Call (Caller side)
-  const initiateCall = useCallback(async () => {
-    const targetRoom = activeRoomIdRef.current;
-    if (!socket || !targetRoom) {
-      alert("Please select or open a conversation first to make a call.");
+  // Caller initiates call
+  const startVoiceCall = useCallback(async () => {
+    if (!socket) {
+      alert("Socket connection not ready.");
       return;
     }
 
@@ -178,7 +162,6 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       setCallState("calling");
       onCallStateChange?.("calling");
 
-      // Pre-unlock audio element playback permissions
       if (remoteAudioRef.current) {
         remoteAudioRef.current.play().catch(() => {});
       }
@@ -192,28 +175,27 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit("call_user", {
-        roomId: targetRoom,
-        signal: { type: "offer", sdp: offer.sdp }
+      socket.emit("voice_call_request", {
+        roomId: activeRoomIdRef.current,
+        targetUserId: targetUserIdRef.current,
+        offer
       });
     } catch (err) {
-      console.error("Failed to start voice call:", err);
+      console.error("Microphone access failed:", err);
       alert("Could not access microphone.");
       endCallCleanly();
     }
   }, [socket, createPeerConnection, endCallCleanly, onCallStateChange]);
 
-  // Accept Incoming Call (Receiver side)
-  const acceptCall = async () => {
-    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
-    if (!socket || !incomingSignalRef.current || !targetRoom) return;
+  // Receiver accepts call
+  const acceptVoiceCall = async () => {
+    if (!socket || !incomingOfferRef.current) return;
 
     try {
       setCallState("connected");
       onCallStateChange?.("connected");
       startTimer();
 
-      // Unlock audio element playback
       if (remoteAudioRef.current) {
         remoteAudioRef.current.play().catch(() => {});
       }
@@ -224,114 +206,106 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       const pc = createPeerConnection();
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      // Set Remote Description from incoming SDP offer
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingSignalRef.current));
+      await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current));
 
-      // Process any ICE candidates that arrived before remote description was set
-      while (pendingCandidates.current.length > 0) {
-        const cand = pendingCandidates.current.shift();
+      while (pendingCandidatesRef.current.length > 0) {
+        const cand = pendingCandidatesRef.current.shift();
         await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       }
 
-      // Create & set local answer
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      socket.emit("accept_call", {
-        roomId: targetRoom,
-        signal: { type: "answer", sdp: answer.sdp }
+      socket.emit("voice_call_accept", {
+        roomId: activeRoomIdRef.current,
+        targetUserId: targetUserIdRef.current,
+        answer
       });
     } catch (err) {
-      console.error("Failed to accept call:", err);
+      console.error("Accept call failed:", err);
       alert("Could not accept call.");
-      socket.emit("reject_call", { roomId: targetRoom });
+      socket.emit("voice_call_decline", {
+        roomId: activeRoomIdRef.current,
+        targetUserId: targetUserIdRef.current
+      });
       endCallCleanly();
     }
   };
 
-  // Decline/Reject Incoming Call
-  const rejectCall = () => {
-    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
-    socket?.emit("reject_call", { roomId: targetRoom });
+  // Receiver declines call
+  const declineVoiceCall = () => {
+    socket?.emit("voice_call_decline", {
+      roomId: activeRoomIdRef.current,
+      targetUserId: targetUserIdRef.current
+    });
     endCallCleanly();
   };
 
-  // Hangup Active Call
-  const terminateCall = () => {
-    const targetRoom = incomingRoomIdRef.current || activeRoomIdRef.current;
-    socket?.emit("end_call", { roomId: targetRoom });
+  // Either party hangs up
+  const hangupVoiceCall = () => {
+    socket?.emit("voice_call_hangup", {
+      roomId: activeRoomIdRef.current,
+      targetUserId: targetUserIdRef.current
+    });
     endCallCleanly();
   };
 
-  // Toggle Mute Audio
+  // Toggle Mute
   const toggleMute = () => {
     if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMuted(!audioTrack.enabled);
+      const track = localStreamRef.current.getAudioTracks()[0];
+      if (track) {
+        track.enabled = !track.enabled;
+        setIsMuted(!track.enabled);
       }
     }
   };
 
-  // Ringtone sound effect
+  // Ringtone effect
   useEffect(() => {
     if (callState === "incoming") {
-      const stopRingtone = startSyntheticRingtone("incoming");
-      return () => stopRingtone();
+      const stop = startRingtone("incoming");
+      return () => stop();
     }
     if (callState === "calling") {
-      const stopRingtone = startSyntheticRingtone("outgoing");
-      return () => stopRingtone();
+      const stop = startRingtone("outgoing");
+      return () => stop();
     }
   }, [callState]);
 
-  // Handle Socket Events
+  // Socket event listeners
   useEffect(() => {
     if (!socket) return;
 
-    const handleIncomingCall = (data) => {
-      // CRITICAL FIX: Ignore incoming call signals originating from our own caller ID!
-      if (data.callerId && currentUserIdRef.current && String(data.callerId) === String(currentUserIdRef.current)) {
+    const handleIncoming = (data) => {
+      if (data.callerId && currentUserId && String(data.callerId) === String(currentUserId)) {
         return;
       }
 
-      // If already in 'incoming' state for a call, ignore duplicate incoming signals
-      if (callStateRef.current === "incoming") {
-        return;
-      }
-
-      // If user is already on an active call ('calling' or 'connected'), send busy status
-      if (callStateRef.current === "calling" || callStateRef.current === "connected") {
-        socket.emit("reject_call", { roomId: data.roomId, busy: true });
-        return;
-      }
-
-      incomingSignalRef.current = data.signal;
-      incomingRoomIdRef.current = data.roomId;
-      setCallerName(data.callerName || peerName || "Someone");
+      incomingOfferRef.current = data.offer;
+      setCallerDisplayName(data.callerName || peerName || "Someone");
       setCallState("incoming");
       onCallStateChange?.("incoming");
     };
 
-    const handleCallAccepted = async (data) => {
-      if (pcRef.current && data.signal) {
+    const handleAccepted = async (data) => {
+      if (pcRef.current && data.answer) {
         try {
-          await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.signal));
-          while (pendingCandidates.current.length > 0) {
-            const cand = pendingCandidates.current.shift();
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+          while (pendingCandidatesRef.current.length > 0) {
+            const cand = pendingCandidatesRef.current.shift();
             await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
           }
           setCallState("connected");
           onCallStateChange?.("connected");
           startTimer();
-        } catch (err) {
-          console.error("Error setting remote description on accept:", err);
+        } catch (e) {
+          console.error("Error setting answer:", e);
         }
       }
     };
 
-    const handleCallRejected = (data) => {
+    const handleDeclined = (data) => {
       if (data?.busy) {
         alert("User is currently on another call.");
       } else {
@@ -340,55 +314,50 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
       endCallCleanly();
     };
 
-    const handleCallEnded = () => {
+    const handleEnded = () => {
       endCallCleanly();
     };
 
-    const handleWebRTCSignal = async (data) => {
-      // Ignore candidates generated by self
-      if (data.senderId && currentUserIdRef.current && String(data.senderId) === String(currentUserIdRef.current)) {
+    const handleICE = async (data) => {
+      if (data.senderId && currentUserId && String(data.senderId) === String(currentUserId)) {
         return;
       }
-      const { signal } = data;
-      if (!signal) return;
-
-      if (signal.type === "candidate") {
+      if (data.candidate) {
         if (pcRef.current && pcRef.current.remoteDescription) {
-          await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
         } else {
-          pendingCandidates.current.push(signal.candidate);
+          pendingCandidatesRef.current.push(data.candidate);
         }
       }
     };
 
-    socket.on("incoming_call", handleIncomingCall);
-    socket.on("call_accepted", handleCallAccepted);
-    socket.on("call_rejected", handleCallRejected);
-    socket.on("call_ended", handleCallEnded);
-    socket.on("webrtc_signal", handleWebRTCSignal);
+    socket.on("voice_call_incoming", handleIncoming);
+    socket.on("voice_call_accepted", handleAccepted);
+    socket.on("voice_call_declined", handleDeclined);
+    socket.on("voice_call_ended", handleEnded);
+    socket.on("voice_call_ice", handleICE);
 
     return () => {
-      socket.off("incoming_call", handleIncomingCall);
-      socket.off("call_accepted", handleCallAccepted);
-      socket.off("call_rejected", handleCallRejected);
-      socket.off("call_ended", handleCallEnded);
-      socket.off("webrtc_signal", handleWebRTCSignal);
+      socket.off("voice_call_incoming", handleIncoming);
+      socket.off("voice_call_accepted", handleAccepted);
+      socket.off("voice_call_declined", handleDeclined);
+      socket.off("voice_call_ended", handleEnded);
+      socket.off("voice_call_ice", handleICE);
     };
-  }, [socket, peerName, startTimer, endCallCleanly, onCallStateChange]);
+  }, [socket, currentUserId, peerName, startTimer, endCallCleanly, onCallStateChange]);
 
-  // Expose call trigger to window
+  // Expose trigger globally
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.__triggerVoiceCall = initiateCall;
+      window.__triggerVoiceCall = startVoiceCall;
     }
-  }, [initiateCall]);
+  }, [startVoiceCall]);
 
   return (
     <>
-      {/* Remote Audio Element */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
 
-      {/* Calling / Outgoing State Modal */}
+      {/* Outgoing Calling State */}
       {callState === "calling" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in p-4">
           <div className="glass-card flex w-full max-w-sm flex-col items-center rounded-3xl p-6 text-center shadow-2xl">
@@ -401,7 +370,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
             <button
               type="button"
-              onClick={terminateCall}
+              onClick={hangupVoiceCall}
               className="mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition hover:scale-110 active:scale-95"
             >
               <PhoneEndIcon />
@@ -415,16 +384,16 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in p-4">
           <div className="glass-card flex w-full max-w-sm flex-col items-center rounded-3xl p-6 text-center shadow-2xl border border-[var(--accent)]/30">
             <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#00a884] to-[#005c4b] text-2xl font-bold text-white shadow-lg">
-              {(callerName || "User").slice(0, 2).toUpperCase()}
+              {(callerDisplayName || "User").slice(0, 2).toUpperCase()}
               <span className="absolute -inset-2 rounded-full border-2 border-emerald-400 animate-ping opacity-60" />
             </div>
-            <h3 className="text-lg font-bold text-[var(--ink)]">{callerName}</h3>
+            <h3 className="text-lg font-bold text-[var(--ink)]">{callerDisplayName}</h3>
             <p className="mt-1 text-xs font-semibold text-emerald-400">Incoming Voice Call 📞</p>
 
             <div className="mt-8 flex items-center justify-center gap-8">
               <button
                 type="button"
-                onClick={rejectCall}
+                onClick={declineVoiceCall}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition hover:scale-110 active:scale-95"
                 title="Decline"
               >
@@ -433,7 +402,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
               <button
                 type="button"
-                onClick={acceptCall}
+                onClick={acceptVoiceCall}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg transition hover:scale-110 active:scale-95 animate-bounce"
                 title="Accept"
               >
@@ -444,14 +413,14 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
         </div>
       )}
 
-      {/* Ongoing Connected Call Floating Bar */}
+      {/* Active Call Floating Bar */}
       {callState === "connected" && (
         <div className="fixed top-4 left-1/2 z-50 -translate-x-1/2 animate-fade-in">
           <div className="glass-card flex items-center gap-4 rounded-full px-5 py-2.5 shadow-2xl border border-emerald-500/40 bg-[var(--panel-dark)]/90">
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs font-bold text-[var(--ink)]">{peerName || "Call"}</span>
-              <span className="text-xs text-[var(--ink-soft)] font-mono">{formatDuration(callDuration)}</span>
+              <span className="text-xs text-[var(--ink-soft)] font-mono">{formatTimer(duration)}</span>
             </div>
 
             <div className="h-4 w-[1px] bg-[var(--panel-border)]" />
@@ -470,7 +439,7 @@ export default function VoiceCallModal({ socket, activeRoomId, peerName, current
 
               <button
                 type="button"
-                onClick={terminateCall}
+                onClick={hangupVoiceCall}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white shadow-md transition hover:scale-105 active:scale-95"
                 title="End Call"
               >
