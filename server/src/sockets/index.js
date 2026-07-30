@@ -578,6 +578,46 @@ function initSocket(
       }
     });
 
+    /* ── WebRTC 1-to-1 Voice Call Signaling ── */
+    socket.on("call_user", (payload) => {
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) return;
+      socket.to(activeRoomId).emit("incoming_call", {
+        callerId: user.id,
+        callerName: user.name || user.username || "Someone",
+        signal: payload?.signal
+      });
+    });
+
+    socket.on("accept_call", (payload) => {
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) return;
+      socket.to(activeRoomId).emit("call_accepted", {
+        signal: payload?.signal
+      });
+    });
+
+    socket.on("reject_call", () => {
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) return;
+      socket.to(activeRoomId).emit("call_rejected");
+    });
+
+    socket.on("end_call", () => {
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) return;
+      socket.to(activeRoomId).emit("call_ended");
+    });
+
+    socket.on("webrtc_signal", (payload) => {
+      const activeRoomId = socket.data.roomId;
+      if (!activeRoomId) return;
+      socket.to(activeRoomId).emit("webrtc_signal", {
+        senderId: user.id,
+        signal: payload?.signal
+      });
+    });
+
     socket.on("remember_admin", async (payload, ack) => {
       const activeRoomId = socket.data.roomId;
       if (!activeRoomId) {
