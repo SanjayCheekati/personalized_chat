@@ -286,6 +286,14 @@ export default function AdminDashboard({
   useEffect(() => {
     setToggleOn(true);
 
+    if (typingRef.current.timeoutId) {
+      clearTimeout(typingRef.current.timeoutId);
+    }
+    if (typingRef.current.active && socketRef.current) {
+      socketRef.current.emit("stop_typing");
+    }
+    typingRef.current = { active: false, timeoutId: null };
+
     if (!activeConversationId || !auth.token) {
       setMessages([]);
       setDraft("");

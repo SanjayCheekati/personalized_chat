@@ -73,7 +73,7 @@ function initSocket(
 
     if (roomId) {
       if (conversationStore) {
-        const allowed = await conversationStore.isParticipant(roomId, user.id);
+        const allowed = isAdmin || (await conversationStore.isParticipant(roomId, user.id));
         if (!allowed) {
           socket.emit("room_forbidden");
           socket.disconnect();
@@ -133,9 +133,9 @@ function initSocket(
         return;
       }
 
-      const allowed = conversationStore
+      const allowed = isAdmin || (conversationStore
         ? await conversationStore.isParticipant(conversationId, user.id)
-        : true;
+        : true);
       if (!allowed) {
         if (typeof ack === "function") {
           ack({ ok: false, error: "forbidden" });
@@ -279,9 +279,14 @@ function initSocket(
       if (!activeRoomId) {
         return;
       }
-      const receiverId = conversationStore
+      let receiverId = conversationStore
         ? await conversationStore.getOtherParticipant(activeRoomId, user.id)
         : await presenceStore.getOtherUserId(activeRoomId, user.id);
+
+      if (!receiverId && conversationStore) {
+        const participants = await conversationStore.getParticipants(activeRoomId);
+        receiverId = participants.find((id) => id !== user.id) || null;
+      }
 
       const typingPayload = {
         conversationId: activeRoomId,
@@ -294,9 +299,7 @@ function initSocket(
       if (receiverId) {
         io.to(receiverId).emit("user_typing", typingPayload);
       }
-      if (!isAdmin) {
-        io.to(ADMIN_ROOM).emit("admin_typing", typingPayload);
-      }
+      io.to(ADMIN_ROOM).emit("admin_typing", typingPayload);
     });
 
     socket.on("stop_typing", async () => {
@@ -304,9 +307,14 @@ function initSocket(
       if (!activeRoomId) {
         return;
       }
-      const receiverId = conversationStore
+      let receiverId = conversationStore
         ? await conversationStore.getOtherParticipant(activeRoomId, user.id)
         : await presenceStore.getOtherUserId(activeRoomId, user.id);
+
+      if (!receiverId && conversationStore) {
+        const participants = await conversationStore.getParticipants(activeRoomId);
+        receiverId = participants.find((id) => id !== user.id) || null;
+      }
 
       const typingPayload = {
         conversationId: activeRoomId,
@@ -319,9 +327,7 @@ function initSocket(
       if (receiverId) {
         io.to(receiverId).emit("user_typing", typingPayload);
       }
-      if (!isAdmin) {
-        io.to(ADMIN_ROOM).emit("admin_typing", typingPayload);
-      }
+      io.to(ADMIN_ROOM).emit("admin_typing", typingPayload);
     });
 
     socket.on("seen_message", async (payload) => {
