@@ -778,35 +778,48 @@ export default function Home() {
 
   if (!auth) {
     return (
-      <div className="page-shell flex items-center justify-center">
-        <div className="w-full max-w-md rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-8 shadow-glow animate-fade-in">
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.4em] text-[var(--accent)]">FlashChat</p>
-            <h1 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Sign in</h1>
-            <p className="mt-2 text-sm text-[var(--ink-soft)]">
-              Use your username and password.
+      <div className="page-shell login-bg flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-3xl glass-card p-8 animate-fade-in relative overflow-hidden">
+          {/* Ambient glowing orb */}
+          <div className="absolute -top-24 -left-24 h-48 w-48 rounded-full bg-[var(--accent)] opacity-20 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 h-48 w-48 rounded-full bg-[var(--accent-warm)] opacity-15 blur-3xl pointer-events-none" />
+
+          {/* Logo Mark Header */}
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#00a884] to-[#005c4b] shadow-[0_8px_24px_rgba(0,168,132,0.35)]">
+              <span className="text-2xl select-none">⚡</span>
+            </div>
+            <p className="text-xs uppercase tracking-[0.4em] font-bold text-[var(--accent)]">FlashChat</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ink)]">
+              {authMode === "login" ? "Welcome back" : "Create account"}
+            </h1>
+            <p className="mt-1 text-xs text-[var(--ink-soft)]">
+              {authMode === "login" ? "Sign in to access your messages" : "Join FlashChat in seconds"}
             </p>
           </div>
 
-          <div className="mb-4 flex items-center gap-2">
+          {/* Sliding Segmented Tab Switcher */}
+          <div className="relative mb-6 flex rounded-2xl bg-[var(--panel-dark)] p-1 border border-[var(--panel-border)]">
+            <div
+              className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-xl send-btn-gradient transition-all duration-200 ease-out shadow-sm"
+              style={{
+                left: authMode === "login" ? "4px" : "calc(50% + 0px)"
+              }}
+            />
             <button
               type="button"
               onClick={() => setAuthMode("login")}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                authMode === "login"
-                  ? "bg-[var(--accent)] text-white"
-                  : "border border-[var(--panel-border)] text-[var(--ink)]"
+              className={`relative z-10 flex-1 rounded-xl py-2 text-xs font-semibold transition-colors duration-150 ${
+                authMode === "login" ? "text-white" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
               }`}
             >
-              Login
+              Sign in
             </button>
             <button
               type="button"
               onClick={() => setAuthMode("signup")}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                authMode === "signup"
-                  ? "bg-[var(--accent)] text-white"
-                  : "border border-[var(--panel-border)] text-[var(--ink)]"
+              className={`relative z-10 flex-1 rounded-xl py-2 text-xs font-semibold transition-colors duration-150 ${
+                authMode === "signup" ? "text-white" : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
               }`}
             >
               Sign up
@@ -815,17 +828,19 @@ export default function Home() {
 
           {authMode === "login" ? (
             <form onSubmit={handleLogin} className="space-y-4">
-              <input
-                type="text"
-                required
-                value={loginForm.username}
-                onChange={(event) =>
-                  setLoginForm((prev) => ({ ...prev, username: event.target.value }))
-                }
-                placeholder="Username"
-                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
-              />
-              <div className="relative">
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  required
+                  value={loginForm.username}
+                  onChange={(event) =>
+                    setLoginForm((prev) => ({ ...prev, username: event.target.value }))
+                  }
+                  placeholder="Username"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all"
+                />
+              </div>
+              <div className="relative space-y-1">
                 <input
                   type={showPassword ? "text" : "password"}
                   required
@@ -834,12 +849,12 @@ export default function Home() {
                     setLoginForm((prev) => ({ ...prev, password: event.target.value }))
                   }
                   placeholder="Password"
-                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ink-soft)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)]"
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -848,7 +863,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={authLoading}
-                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full rounded-2xl send-btn-gradient px-4 py-3.5 text-sm font-semibold text-white shadow-glow transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {authLoading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -864,13 +879,13 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setForgotOpen((prev) => !prev)}
-                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-2 text-xs font-semibold text-[var(--ink)]"
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-transparent px-4 py-2 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)] transition-colors"
               >
                 Forgot password?
               </button>
 
               {status.error ? (
-                <p className="flex items-center gap-1.5 text-sm text-[var(--accent-warm)]">
+                <p className="flex items-center justify-center gap-1.5 text-xs text-[var(--accent-warm)] bg-[var(--accent-warm)] bg-opacity-10 py-2 rounded-xl border border-[var(--accent-warm)] border-opacity-20">
                   <span>⚠</span>{friendlyError(status.error)}
                 </p>
               ) : null}
@@ -885,7 +900,7 @@ export default function Home() {
                   setSignupForm((prev) => ({ ...prev, username: event.target.value }))
                 }
                 placeholder="Username"
-                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all"
               />
               <div className="relative">
                 <input
@@ -896,12 +911,12 @@ export default function Home() {
                     setSignupForm((prev) => ({ ...prev, password: event.target.value }))
                   }
                   placeholder="Password"
-                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ink-soft)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)]"
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -915,12 +930,12 @@ export default function Home() {
                     setSignupForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
                   }
                   placeholder="Confirm password"
-                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                  className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-4 py-3 pr-12 text-sm text-[var(--ink)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ink-soft)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--ink-soft)] hover:text-[var(--ink)]"
                 >
                   {showConfirmPassword ? "Hide" : "Show"}
                 </button>
@@ -929,7 +944,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={authLoading}
-                className="w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full rounded-2xl send-btn-gradient px-4 py-3.5 text-sm font-semibold text-white shadow-glow transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {authLoading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -943,7 +958,7 @@ export default function Home() {
               </button>
 
               {status.error ? (
-                <p className="flex items-center gap-1.5 text-sm text-[var(--accent-warm)]">
+                <p className="flex items-center justify-center gap-1.5 text-xs text-[var(--accent-warm)] bg-[var(--accent-warm)] bg-opacity-10 py-2 rounded-xl border border-[var(--accent-warm)] border-opacity-20">
                   <span>⚠</span>{friendlyError(status.error)}
                 </p>
               ) : null}
@@ -1054,10 +1069,13 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setChatOpen(true)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] px-3 py-3 text-left transition hover:-translate-y-0.5"
+                className="flex w-full items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-dark)] p-3 text-left transition hover:bg-[var(--panel)] hover:-translate-y-0.5"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#00a884] to-[#005c4b] text-xs font-bold text-white shadow-sm">
                   {(peer.name || "Arjun").slice(0, 2).toUpperCase()}
+                  {peer.online && (
+                    <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[var(--accent)] border-2 border-[var(--panel-dark)] shadow-[0_0_8px_var(--accent)]" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[var(--ink)]">

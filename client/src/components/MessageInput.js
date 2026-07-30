@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function MessageInput({
   disabled,
@@ -14,6 +14,7 @@ export default function MessageInput({
   keepFocus = false
 }) {
   const textareaRef = useRef(null);
+  const [isPulsing, setIsPulsing] = useState(false);
 
   const focusInput = () => {
     if (disabled) {
@@ -44,6 +45,9 @@ export default function MessageInput({
     if (!value.trim()) {
       return;
     }
+    setIsPulsing(true);
+    setTimeout(() => setIsPulsing(false), 300);
+
     onSend?.(value);
     onValueChange?.("");
     onTyping?.(false);
@@ -134,7 +138,9 @@ export default function MessageInput({
           onPointerDown={(e) => e.preventDefault()}
           onMouseDown={(e) => e.preventDefault()}
           onClick={submit}
-          className="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-glow transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          className={`flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full send-btn-gradient text-white shadow-glow transition hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+            isPulsing ? "send-btn-pulse" : ""
+          }`}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
@@ -144,3 +150,4 @@ export default function MessageInput({
     </div>
   );
 }
+

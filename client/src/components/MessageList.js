@@ -162,14 +162,14 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       ) : null}
       <div
-        className={`group flex animate-pop ${isMine ? "justify-end" : "justify-start"}`}
+        className={`group flex ${isMine ? "justify-end animate-bubble-me" : "justify-start animate-bubble-them"}`}
       >
         <div className="relative max-w-[80%] sm:max-w-[70%]">
           <div
-            className={`rounded-2xl border px-3 py-2 text-sm ${
+            className={`border px-3.5 py-2.5 text-sm shadow-sm ${
               isMine
-                ? "border-[var(--bubble-border)] bg-[var(--bubble-me)] text-[var(--ink)]"
-                : "border-[var(--bubble-border)] bg-[var(--bubble-them)] text-[var(--ink)]"
+                ? "border-[var(--bubble-border)] bubble-me-styled text-[var(--ink)]"
+                : "border-[var(--bubble-border)] bubble-them-styled text-[var(--ink)]"
             }`}
           >
             {message.replyTo ? (
